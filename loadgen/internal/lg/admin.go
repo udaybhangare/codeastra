@@ -89,3 +89,35 @@ func (a *Admin) StoreRun(ctx context.Context, r *Report) error {
 	}, nil)
 	return err
 }
+
+// FinishRun completes a run created by POST /admin/scenarios/{name}/run.
+func (a *Admin) FinishRun(ctx context.Context, runID string, r *Report) error {
+	if err := a.ensureToken(ctx); err != nil {
+		return err
+	}
+	_, err := a.call(ctx, http.MethodPost, "/admin/runs", map[string]any{
+		"run_id": runID, "started_at": r.StartedAt, "ended_at": r.EndedAt, "summary": r,
+	}, nil)
+	return err
+}
+
+// FailRun closes a run with an error summary so the dashboard does not wait forever.
+func (a *Admin) FailRun(ctx context.Context, runID, msg string, at time.Time) error {
+	if err := a.ensureToken(ctx); err != nil {
+		return err
+	}
+	_, err := a.call(ctx, http.MethodPost, "/admin/runs", map[string]any{
+		"run_id": runID, "ended_at": at, "summary": map[string]any{"error": msg},
+	}, nil)
+	return err
+}
+
+// Progress is a best-effort heartbeat (phase warmup|attack|cooldown).
+func (a *Admin) Progress(ctx context.Context, runID, phase string, elapsed, total time.Duration) {
+	if a.ensureToken(ctx) != nil {
+		return
+	}
+	_, _ = a.call(ctx, http.MethodPost, "/admin/runs/"+runID+"/progress", map[string]any{
+		"phase": phase, "elapsed_s": elapsed.Seconds(), "total_s": total.Seconds(),
+	}, nil)
+}

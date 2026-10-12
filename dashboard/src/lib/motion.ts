@@ -1,5 +1,6 @@
 "use client";
 // Spring presets + shared variants (docs/ui/02-motion-system.md).
+// Springs accept only 2 keyframes: for array values like [0, -5, 0] use a tween transition.
 import { useMotionValue, useReducedMotion, useSpring, type Transition, type Variants } from "motion/react";
 import { useEffect, useState } from "react";
 

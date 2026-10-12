@@ -1,8 +1,8 @@
 # 08 — Frontend & UX Spec
 
-> **Visual redesign:** the look & feel, landing page and component designs are superseded by `docs/ui/` (build via `prompts/ui/U01–U14`). Personas, screens and data flow below still apply.
+> **Visual redesign:** the look & feel, landing page and component designs are superseded by `docs/ui/` (build via `prompts/ui/U01–U14`). Personas, screens and data flow below still apply. Visual details here (dark theme, shadcn styling) are historical: follow `docs/ui/00…07` instead.
 
-Stack: Next.js (App Router) + TS + Tailwind + shadcn/ui + Recharts; data via REST + one WebSocket (`/admin/stream`). Dark theme, ops-console feel. Goal: a judge understands the story in 30 seconds without narration.
+Stack: Next.js (App Router) + TS + Tailwind + shadcn/ui + Recharts; data via REST + one WebSocket (`/admin/stream`). Bright "Paper & Ultramarine" theme (see `docs/ui/`); the dark ops-console feel described originally no longer applies. Goal: a judge understands the story in 30 seconds without narration.
 
 ## Personas
 1. **Platform operator** (Admin Console) — sees fleet health, who is hurting whom, what the system did.

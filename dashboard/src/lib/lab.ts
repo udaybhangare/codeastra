@@ -5,16 +5,19 @@ import { useStream } from "./store";
 import type { BundleFile, RunBundle } from "./runs";
 
 export type LabStatus = "idle" | "running-off" | "running-on" | "done" | "error";
+/** "ab" = OFF then ON with one seed (docs/09); "off"/"on" = a single run. */
+export type LabMode = "ab" | "off" | "on";
 
 interface LabState {
   status: LabStatus;
   error?: string;
   scenario?: string;
+  mode: LabMode;
   seed: number;
   off?: RunBundle;
   on?: RunBundle;
   source?: "live" | "recorded";
-  start: (scenario: string, seed: number, durationS: number) => Promise<void>;
+  start: (scenario: string, seed: number, durationS: number, mode?: LabMode) => Promise<void>;
   load: (f: BundleFile) => void;
 }
 
@@ -42,20 +45,25 @@ function waitForResult(runId: string): Promise<RunBundle> {
 // A/B protocol (docs/09): same seed, isolation OFF then ON; always leave isolation ON.
 export const useLab = create<LabState>((set, get) => ({
   status: "idle",
+  mode: "ab",
   seed: 42,
-  start: async (scenario, seed, durationS) => {
+  start: async (scenario, seed, durationS, mode = "ab") => {
     const s = get().status;
     if (s === "running-off" || s === "running-on") return;
-    set({ status: "running-off", scenario, seed, off: undefined, on: undefined, error: undefined, source: "live" });
+    set({ status: mode === "on" ? "running-on" : "running-off", mode, scenario, seed, off: undefined, on: undefined, error: undefined, source: "live" });
     try {
-      await api.setIsolation("off");
-      const offRun = await api.runScenario(scenario, seed, durationS);
-      const off = await waitForResult(offRun.id);
-      set({ off: { ...off, seed }, status: "running-on" });
-      await api.setIsolation("on");
-      const onRun = await api.runScenario(scenario, seed, durationS);
-      const on = await waitForResult(onRun.id);
-      set({ on: { ...on, seed }, status: "done" });
+      if (mode !== "on") {
+        await api.setIsolation("off");
+        const offRun = await api.runScenario(scenario, seed, durationS);
+        const off = await waitForResult(offRun.id);
+        set({ off: { ...off, seed }, status: mode === "ab" ? "running-on" : "done" });
+      }
+      if (mode !== "off") {
+        await api.setIsolation("on");
+        const onRun = await api.runScenario(scenario, seed, durationS);
+        const on = await waitForResult(onRun.id);
+        set({ on: { ...on, seed }, status: "done" });
+      }
     } catch (e) {
       set({ status: "error", error: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -66,5 +74,5 @@ export const useLab = create<LabState>((set, get) => ({
       }
     }
   },
-  load: (f) => set({ status: "done", error: undefined, scenario: f.scenario, seed: f.seed ?? get().seed, off: f.off, on: f.on, source: "recorded" }),
+  load: (f) => set({ status: "done", mode: "ab", error: undefined, scenario: f.scenario, seed: f.seed ?? get().seed, off: f.off, on: f.on, source: "recorded" }),
 }));

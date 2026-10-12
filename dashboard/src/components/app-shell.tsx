@@ -1,41 +1,38 @@
 "use client";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { Activity, FlaskConical, History, LayoutDashboard, ScrollText, Users, Brain, Presentation } from "lucide-react";
+import { motion } from "motion/react";
 import { useStream } from "@/lib/store";
 import { useUi } from "@/lib/ui";
-import { ConnectionStatus, IsolationBadge } from "./status";
-import { cn } from "@/lib/utils";
+import { springSlow, springSnappy, useSafeTransition } from "@/lib/motion";
 import { AdminLogin } from "./admin-login";
+import { ConnectionBanner } from "./shell/connection-banner";
+import { FloatingSidebar } from "./shell/floating-sidebar";
+import { PageTransition } from "./shell/page-transition";
+import { Shortcuts } from "./shell/shortcuts";
+import { TopBar } from "./shell/top-bar";
 
-const NAV = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/incidents", label: "Incidents", icon: History },
-  { href: "/scenarios", label: "Scenario Lab", icon: FlaskConical },
-  { href: "/tenants", label: "Tenants", icon: Users },
-  { href: "/predictor", label: "Predictor", icon: Brain },
-  { href: "/audit", label: "Audit", icon: ScrollText },
-];
-
-// The tenant portal is a separate surface: it must not mount the admin stream
-// (which carries every tenant), so /portal bypasses the admin shell entirely.
+// The landing page (/) and tenant portal are separate surfaces: they must not mount the admin stream
+// (which carries every tenant), so they bypass the admin shell entirely.
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  if (path.startsWith("/portal")) return <>{children}</>;
+  if (path === "/" || path.startsWith("/portal")) return <>{children}</>;
   return <AdminShell>{children}</AdminShell>;
 }
 
 function AdminShell({ children }: { children: React.ReactNode }) {
-  const path = usePathname();
   const connect = useStream((s) => s.connect);
   const disconnect = useStream((s) => s.disconnect);
-
   const presentation = useUi((s) => s.presentation);
-  const toggle = useUi((s) => s.togglePresentation);
+  const pref = useUi((s) => s.sidebarCollapsed);
+  const t = useSafeTransition(presentation ? springSlow : springSnappy);
 
+  // Presentation mode scales type via --type-scale on <html data-presentation> (docs/ui/01).
   useEffect(() => {
-    document.documentElement.style.fontSize = presentation ? "125%" : "";
+    const el = document.documentElement;
+    if (presentation) el.setAttribute("data-presentation", "");
+    else el.removeAttribute("data-presentation");
+    return () => el.removeAttribute("data-presentation");
   }, [presentation]);
 
   useEffect(() => {
@@ -43,54 +40,28 @@ function AdminShell({ children }: { children: React.ReactNode }) {
     return () => disconnect();
   }, [connect, disconnect]);
 
+  // Content clears the floating sidebar (16 px edge + width + 16 px gap). Below 1280 px it is always a rail.
+  const rail = presentation || pref;
   return (
-    <div className="flex h-full">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-background focus:p-2">
+    <div className="min-h-full bg-paper">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-full focus:bg-ultra focus:px-4 focus:py-2 focus:text-white">
         Skip to content
       </a>
-      <aside className={cn("w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar", presentation ? "hidden" : "flex")}>
-        <div className="flex h-14 items-center gap-2 px-4 font-semibold">
-          <Activity className="size-5 text-info" aria-hidden />
-          Bulkhead
-        </div>
-        <nav aria-label="Primary" className="flex flex-col gap-1 p-2">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = href === "/" ? path === "/" : path.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent",
-                  active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : "text-muted-foreground",
-                )}
-              >
-                <Icon className="size-4" aria-hidden />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-end gap-3 border-b border-border px-4">
-          <button
-            onClick={toggle}
-            aria-pressed={presentation}
-            className={cn("flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted", presentation && "bg-muted font-medium")}
-          >
-            <Presentation className="size-3.5" aria-hidden />
-            Presentation
-          </button>
-          <IsolationBadge />
-          <ConnectionStatus />
-        </header>
-        <main id="main" className="min-h-0 flex-1 overflow-y-auto p-4">
-          <AdminLogin />
-          {children}
+      <Shortcuts />
+      <FloatingSidebar />
+      <motion.div
+        initial={false}
+        animate={{ paddingLeft: rail ? 96 : 264 }}
+        transition={t}
+        className="max-[1279px]:!pl-[96px]"
+      >
+        <TopBar />
+        <ConnectionBanner />
+        <main id="main" tabIndex={-1} className="outline-none">
+          <PageTransition>{children}</PageTransition>
         </main>
-      </div>
+      </motion.div>
+      <AdminLogin />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// Landing scroll script (docs/ui/03 "Landing camera path"). Stubbed keyframes; final tuning in U05.
+// Landing scroll script (docs/ui/03 "Landing camera path"). Pure: no React.
 import type { Level } from "@/lib/ws-types";
 import type { HullTenant } from "@/lib/hull";
 
@@ -26,19 +26,29 @@ export const STORY_INDEX = 2;
 const calm: StoryState = { zoom: 1, focus: 0, flood: 0, door: 0, isolationOff: 0, ring: 0, labels: 0, ghost: 0 };
 const k = (at: number, s: Partial<StoryState>): { at: number; s: StoryState } => ({ at, s: { ...calm, ...s } });
 
+// Mirrors the table in docs/ui/03 (progress -> section). Section starts: see SECTIONS in landing/scroll-store.
 export const storyKeyframes = [
   k(0, {}),
   k(0.12, {}),
+  // 0.12-0.30 problem: push in on compartment 3, it floods and leaks (protection OFF view)
   k(0.2, { zoom: 1.7, focus: 1, flood: 1, isolationOff: 1 }),
   k(0.3, { zoom: 1.7, focus: 1, flood: 1, isolationOff: 1 }),
-  k(0.38, { zoom: 1.1, ring: 1 }),
+  // 0.30-0.50 fair queue: ease back, lanes highlighted, quantum ring
+  k(0.36, { zoom: 1.1, ring: 1 }),
   k(0.5, { zoom: 1.1, ring: 1 }),
-  k(0.56, { zoom: 1.7, focus: 1, labels: 1, flood: 0.5 }),
+  // 0.50-0.65 hard walls: close on the wall, kernel labels
+  k(0.55, { zoom: 1.7, focus: 1, labels: 1, flood: 0.5 }),
   k(0.65, { zoom: 1.7, focus: 1, labels: 1, flood: 0.5 }),
-  k(0.7, { zoom: 1.6, focus: 1, flood: 1, door: 1 }),
+  // 0.65-0.80 ladder: door closes 1 -> 5 in steps (rounded in applyStory)
+  k(0.68, { zoom: 1.6, focus: 1, flood: 1, door: 1 }),
+  k(0.71, { zoom: 1.6, focus: 1, flood: 1, door: 2 }),
+  k(0.74, { zoom: 1.6, focus: 1, flood: 1, door: 3 }),
+  k(0.77, { zoom: 1.6, focus: 1, flood: 1, door: 4 }),
   k(0.8, { zoom: 1.6, focus: 1, flood: 1, door: 5 }),
-  k(0.86, { zoom: 1.2, focus: 0.6, ghost: 1 }),
-  k(0.92, { zoom: 1.2, focus: 0.6, ghost: 1 }),
+  // 0.80-0.92 predictor: incident resolved, real water low, ghost water ahead of it
+  k(0.84, { zoom: 1.2, focus: 0.6, flood: 0.25, ghost: 1 }),
+  k(0.92, { zoom: 1.2, focus: 0.6, flood: 0.25, ghost: 1 }),
+  // 0.92-1.00 proof: pull back to a calm, healthy hull
   k(1, {}),
 ];
 

@@ -1,23 +1,17 @@
 "use client";
-import { CheckCircle2, CircleAlert, Loader2, ShieldCheck, ShieldOff, WifiOff, FlaskConical } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldOff, WifiOff, FlaskConical } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useStream } from "@/lib/store";
-import { LADDER } from "@/lib/ladder";
-import type { Level } from "@/lib/ws-types";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-const TONE = {
-  ok: "border-ok/40 bg-ok/10 text-ok",
-  warn: "border-warn/40 bg-warn/10 text-warn",
-  bad: "border-bad/40 bg-bad/10 text-bad",
-  info: "border-info/40 bg-info/10 text-info",
-} as const;
+type PillTone = "ok" | "warn" | "bad" | "info";
+const MAP = { ok: "ok", warn: "warn", bad: "bad", info: "predict" } as const;
 
-export function Pill({ tone, className, children }: { tone: keyof typeof TONE; className?: string; children: React.ReactNode }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium", TONE[tone], className)}>
-      {children}
-    </span>
-  );
+/** Legacy status chip (still imported by pre-redesign pages); now a thin wrapper over `Badge`. */
+export function Pill({ tone, className, children }: { tone: PillTone; className?: string; children: React.ReactNode }) {
+  return <Badge tone={MAP[tone]} className={cn("h-6 px-2.5 text-xs", className)}>{children}</Badge>;
 }
 
 export function IsolationBadge() {
@@ -30,29 +24,49 @@ export function IsolationBadge() {
   );
 }
 
+/** Seconds since the last stream message; ticks 1 Hz client-side (display only). */
+function useAgeSeconds(at: number | null): number | null {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    tick();
+    const h = setInterval(tick, 1000);
+    return () => clearInterval(h);
+  }, []);
+  if (at == null || now == null) return null;
+  return Math.max(0, Math.round((now - at) / 1000));
+}
+
 export function ConnectionStatus() {
   const conn = useStream((s) => s.conn);
   const source = useStream((s) => s.source);
+  const last = useStream((s) => s.lastMessageAt);
+  const age = useAgeSeconds(last);
+  const tip = age == null ? "No messages yet" : `Last message ${age}s ago`;
   return (
     <div className="flex items-center gap-2" role="status" aria-live="polite">
       {source === "mock" && (
-        <Pill tone="info"><FlaskConical className="size-3.5" aria-hidden />Mock stream</Pill>
+        <Badge tone="predict" icon={<FlaskConical aria-hidden />}>Simulated</Badge>
       )}
-      {conn === "open" && <Pill tone="ok"><CheckCircle2 className="size-3.5" aria-hidden />Live</Pill>}
-      {conn === "connecting" && <Pill tone="warn"><Loader2 className="size-3.5 animate-spin" aria-hidden />Connecting</Pill>}
-      {conn === "reconnecting" && <Pill tone="warn"><Loader2 className="size-3.5 animate-spin" aria-hidden />Reconnecting…</Pill>}
-      {conn === "closed" && <Pill tone="bad"><WifiOff className="size-3.5" aria-hidden />Disconnected</Pill>}
+      <Tooltip content={tip} side="bottom">
+        <span className="inline-flex">
+          {conn === "open" && (
+            <Badge tone="ok">
+              <span className="relative -ml-0.5 mr-0.5 inline-flex size-2">
+                <span className="absolute inset-0 animate-ping rounded-full bg-ok motion-reduce:animate-none" />
+                <span className="relative size-2 rounded-full bg-ok" />
+              </span>
+              Live · 1.0 Hz
+            </Badge>
+          )}
+          {conn === "connecting" && <Badge tone="warn" icon={<Loader2 className="animate-spin" aria-hidden />}>Connecting…</Badge>}
+          {conn === "reconnecting" && <Badge tone="warn" icon={<Loader2 className="animate-spin" aria-hidden />}>Reconnecting…</Badge>}
+          {conn === "closed" && <Badge tone="bad" icon={<WifiOff aria-hidden />}>Offline</Badge>}
+        </span>
+      </Tooltip>
     </div>
   );
 }
 
-export function LadderBadge({ level }: { level: Level }) {
-  const l = LADDER[level] ?? LADDER[0];
-  const Icon = l.tone === "ok" ? CheckCircle2 : CircleAlert;
-  return (
-    <Pill tone={l.tone}>
-      <Icon className="size-3.5" aria-hidden />
-      L{level} {l.name}
-    </Pill>
-  );
-}
+/** Moved to components/domain (U07); re-exported for pre-redesign imports. */
+export { LadderBadge } from "./domain/ladder-badge";

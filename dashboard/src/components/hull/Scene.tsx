@@ -110,7 +110,7 @@ export interface SceneProps extends HullProps {
 }
 
 export default function Scene(props: SceneProps) {
-  const { tenants, isolation, mode, highlightId, onHover, onSelect, scrollProgress, host, active } = props;
+  const { tenants, isolation, mode, highlightId, onHover, onSelect, scrollProgress, host, active, reducedMotion } = props;
   const [hoverId, setHoverId] = useState<string | undefined>();
   const [attack, setAttack] = useState<{ id: string; stage: 1 | 2 } | undefined>();
   const timers = useRef<number[]>([]);
@@ -156,7 +156,7 @@ export default function Scene(props: SceneProps) {
   const hullW = layout.width + HULL_PAD_X * 2;
   const hullH = layout.height + HULL_PAD_TOP + HULL_PAD_BOTTOM;
   const cap = mode === "mini" ? 40 : 60;
-  const parallax = mode === "landing" || hoverId !== undefined;
+  const parallax = !reducedMotion && (mode === "landing" || hoverId !== undefined);
   const keelY = -layout.height / 2 - 0.55;
 
   return (

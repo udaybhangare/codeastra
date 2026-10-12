@@ -17,8 +17,8 @@ export function exportJson(f: BundleFile) {
 export async function exportPng(root: HTMLElement, name: string) {
   const css = getComputedStyle(document.documentElement);
   const resolve = (s: string) => s.replace(/var\((--[\w-]+)\)/g, (_, v) => css.getPropertyValue(v).trim() || "currentColor");
-  const bg = css.getPropertyValue("--card").trim() || "#fff";
-  const fg = css.getPropertyValue("--foreground").trim() || "#000";
+  const bg = css.getPropertyValue("--surface").trim() || "#fff";
+  const fg = css.getPropertyValue("--ink").trim() || "#000";
   const svgs = [...root.querySelectorAll("svg.recharts-surface")] as SVGSVGElement[];
   if (svgs.length === 0) return;
   const imgs = await Promise.all(
@@ -52,4 +52,14 @@ export async function exportPng(root: HTMLElement, name: string) {
   }
   const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
   if (blob) download(name, blob);
+}
+
+/** Download one throttle decision (event + evidence + actions) as JSON. */
+export function exportEventJson(e: unknown, name: string) {
+  download(name, new Blob([JSON.stringify(e, null, 2)], { type: "application/json" }));
+}
+
+/** Download plain CSV text. */
+export function exportCsv(csv: string, name: string) {
+  download(name, new Blob([csv], { type: "text/csv;charset=utf-8" }));
 }

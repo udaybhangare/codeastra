@@ -11,7 +11,7 @@ Single source of truth. Implement as CSS variables on `:root` in `dashboard/src/
 | `--surface` | `#FFFFFF` | Cards, panels |
 | `--ink` | `#14142B` | Primary text |
 | `--ink-2` | `#4A4A68` | Secondary text (AA on paper) |
-| `--ink-3` | `#7A7A96` | Hints, axis labels (large/ancillary only) |
+| `--ink-3` | `#666684` | Hints, axis labels (large/ancillary only) |
 | `--line` | `#E4DED3` | Borders, dividers |
 | `--ultra` | `#3B2EFF` | Brand, primary buttons, links, focus, "predicted" |
 | `--ultra-600` | `#2A1FD6` | Pressed/hover-darker |

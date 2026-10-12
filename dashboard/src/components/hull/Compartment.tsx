@@ -1,5 +1,5 @@
 "use client";
-import { Html, RoundedBox } from "@react-three/drei";
+import { RoundedBox } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { easing } from "maath";
 import { Lock } from "lucide-react";
@@ -10,6 +10,7 @@ import { CELL_D, CELL_H, CELL_W, LEVEL_HEX, doorLevel, type HullTenant, type Slo
 import { LADDER } from "@/lib/ladder";
 import type { Isolation } from "@/lib/ws-types";
 import { Door } from "./Door";
+import { SafeHtml } from "./SafeHtml";
 import { Water } from "./Water";
 
 interface Props {
@@ -87,7 +88,7 @@ export function Compartment({ tenant, slot, usage, isolation, hovered, highlight
       <Door side={1} level={dl} cellW={CELL_W} cellH={CELL_H} depth={CELL_D} />
 
       {/* name plate */}
-      <Html position={[0, -CELL_H / 2 - 0.02, CELL_D / 2]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <SafeHtml position={[0, -CELL_H / 2 - 0.02, CELL_D / 2]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div
           className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-white px-2.5 py-1 text-[11px] font-semibold text-ink shadow-sm"
           style={{ borderColor: accent }}
@@ -98,25 +99,25 @@ export function Compartment({ tenant, slot, usage, isolation, hovered, highlight
             L{tenant.level}
           </span>
         </div>
-      </Html>
+      </SafeHtml>
 
       {sealed && (
-        <Html position={[0, 0.2, CELL_D / 2 + 0.1]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+        <SafeHtml position={[0, 0.2, CELL_D / 2 + 0.1]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="grid h-9 w-9 place-items-center rounded-full bg-ink text-white" title="Quarantined">
             <Lock size={18} aria-label="Quarantined" />
           </div>
-        </Html>
+        </SafeHtml>
       )}
 
       {showWallLabels &&
         WALL_LABELS.map((l, i) => (
-          <Html key={l} position={[0, CELL_H / 2 - 0.45 - i * 0.4, CELL_D / 2 + 0.1]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+          <SafeHtml key={l} position={[0, CELL_H / 2 - 0.45 - i * 0.4, CELL_D / 2 + 0.1]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
             <span className="num whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-white">{l}</span>
-          </Html>
+          </SafeHtml>
         ))}
 
       {hovered && (
-        <Html position={[0, CELL_H / 2 + 0.2, CELL_D / 2]} center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
+        <SafeHtml position={[0, CELL_H / 2 + 0.2, CELL_D / 2]} center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
           <div className="card min-w-[150px] p-3 text-left text-xs">
             <div className="text-[13px] font-semibold">{tenant.label ?? tenant.id}</div>
             <div className="text-ink-2">Tier: {tenant.tier}</div>
@@ -127,7 +128,7 @@ export function Compartment({ tenant, slot, usage, isolation, hovered, highlight
               p99: <span className="num">{tenant.p99_ms !== undefined ? `${Math.round(tenant.p99_ms)} ms` : "n/a"}</span>
             </div>
           </div>
-        </Html>
+        </SafeHtml>
       )}
     </group>
   );

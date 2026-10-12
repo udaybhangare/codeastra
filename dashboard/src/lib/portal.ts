@@ -35,11 +35,12 @@ export interface Showback {
 }
 export interface Live { rps?: number; rejected_rps?: number; p50_ms?: number; p95_ms?: number; p99_ms?: number; queue_depth?: number; inflight?: number }
 
-interface Session { token: string; tenant: string; tier: string }
+interface Session { token: string; tenant: string; tier: string; /** last 4 chars of the API key, for the masked display */ keyHint?: string }
 interface PortalState {
   session: Session | null;
   login: (key: string) => Promise<void>;
   logout: () => void;
+  setKeyHint: (hint: string) => void;
 }
 
 export const usePortal = create<PortalState>((set) => ({
@@ -47,14 +48,15 @@ export const usePortal = create<PortalState>((set) => ({
   async login(key) {
     if (portalMock) {
       const tenant = key.replace(/^mock-/, "") || "acme-shop";
-      return set({ session: { token: `mock-${tenant}`, tenant, tier: tenant === "acme-shop" ? "pro" : "free" } });
+      return set({ session: { token: `mock-${tenant}`, tenant, tier: tenant === "acme-shop" ? "pro" : "free", keyHint: key.slice(-4) || "demo" } });
     }
     const res = await fetch(base() + "/v1/auth/token", { method: "POST", headers: { "X-API-Key": key } });
     if (!res.ok) throw new Error(res.status === 401 ? "That API key was not recognised." : `Login failed (${res.status}).`);
     const b = await res.json();
-    set({ session: { token: b.token, tenant: b.tenant_id, tier: b.tier } });
+    set({ session: { token: b.token, tenant: b.tenant_id, tier: b.tier, keyHint: key.slice(-4) } });
   },
   logout: () => set({ session: null }),
+  setKeyHint: (hint) => set((s) => (s.session ? { session: { ...s.session, keyHint: hint } } : s)),
 }));
 
 async function me<T>(path: string, token: string, init?: RequestInit): Promise<T> {

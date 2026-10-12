@@ -35,6 +35,8 @@ func main() {
 		err = cmdRun(ctx, os.Args[2:], false)
 	case "ab":
 		err = cmdRun(ctx, os.Args[2:], true)
+	case "serve":
+		err = cmdServe(ctx)
 	default:
 		usage()
 	}
@@ -50,6 +52,7 @@ func usage() {
   loadgen schedule <S1..S9|file.json> [--seed N] [--scale F]      print schedule hash/summary
   loadgen run <scenario> [--seed N] [--mode on|off] [flags]
   loadgen ab  <scenario> [--seed N] [flags]                       OFF then ON, same seed
+  loadgen serve                                                   HTTP trigger: POST /run (env LISTEN, default :8089)
 flags: --target URL (LOADGEN_TARGET) --keys file.json (LOADGEN_KEYS_FILE; {"tenant":"api-key"})
        --scale F (shrink phase durations) --out DIR --json --settle 5s
 env:   LOADGEN_ADMIN_TOKEN | LOADGEN_ADMIN_KEY   (isolation toggle + run storage)`)

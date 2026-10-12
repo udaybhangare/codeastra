@@ -35,6 +35,10 @@ async function mint(key: string): Promise<void> {
   if (!b.token) throw new Error("No token in response");
   jwt = { token: b.token, exp: jwtExpMs(b.token) };
 }
+/** True when this tab holds an admin key (used by the portal's "Switch to Admin" link). */
+export function hasAdminSession(): boolean {
+  return jwt !== null || storedKey() !== null;
+}
 /** Sign in with the admin key; throws a readable Error on failure. */
 export async function adminSignIn(key: string): Promise<void> {
   await mint(key.trim());
@@ -127,6 +131,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   get: <T,>(path: string) => req<T>(path),
   setIsolation: (mode: "on" | "off") => req<unknown>("/admin/isolation", { method: "POST", body: JSON.stringify({ mode }) }),
+  /** PUT /admin/tenants/{id}/policy: omitted fields keep their value; audited server-side. */
+  putPolicy: (tenantId: string, patch: Record<string, unknown>) =>
+    req<unknown>(`/admin/tenants/${encodeURIComponent(tenantId)}/policy`, { method: "PUT", body: JSON.stringify(patch) }),
+  /** POST /admin/tenants/{id}/level: level 0–4 pins, null releases the pin. */
+  setLevel: (tenantId: string, level: number | null, reason: string) =>
+    req<unknown>(`/admin/tenants/${encodeURIComponent(tenantId)}/level`, { method: "POST", body: JSON.stringify({ level, reason }) }),
   runScenario: (name: string, seed: number, duration: number) =>
     req<{ id: string }>(`/admin/scenarios/${encodeURIComponent(name)}/run`, {
       method: "POST",

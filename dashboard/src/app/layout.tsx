@@ -10,8 +10,10 @@ const body = Instrument_Sans({ variable: "--font-body", subsets: ["latin"] });
 const mono = Geist_Mono({ variable: "--font-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bulkhead Admin Console",
+  title: { default: "Bulkhead Admin Console", template: "%s · Bulkhead" },
   description: "Live multi-tenant isolation and noisy-neighbor defense",
+  applicationName: "Bulkhead",
+  openGraph: { title: "Bulkhead", description: "One noisy neighbor shouldn't sink the ship." },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

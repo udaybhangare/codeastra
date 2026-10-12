@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { motion, type HTMLMotionProps } from "motion/react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { springBouncy, springSnappy, useMagnetic, useReducedMotionSafe } from "@/lib/motion";
+import { springSnappy, useMagnetic, useReducedMotionSafe } from "@/lib/motion";
 
 export const buttonVariants = cva(
   "relative inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold outline-none transition-colors focus-visible:shadow-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
@@ -99,7 +99,7 @@ export function Button({
             <motion.span
               className="inline-flex"
               whileHover={reduced ? undefined : { rotate: [0, 6, -6, 0] }}
-              transition={springBouncy}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
             >
               {icon}
             </motion.span>

@@ -146,3 +146,70 @@
 - Off-screen pause uses `frameloop="never"` (resumes on `"always"`) instead of `demand` + invalidate: the scene animates continuously, so demand mode would add nothing.
 - Name plates use drei `Html` (DOM) rather than `Text`, which would fetch a font from a CDN.
 - No test runner exists: `toHullTenants` etc. are checked by `dashboard/scripts/check-hull.mjs`.
+
+## U04 — landing hero
+- Added optional `reducedMotion` to `HullProps` (disables cursor parallax) so the landing honours `prefers-reduced-motion`.
+- Hull canvas is offset to the right 62% on desktop (`md:left-[38%]`) so hero text never covers compartments; mobile uses a 46vh top canvas.
+- Until U05, `/` has a 160vh empty `#story` spacer so the scroll-scrubbed camera and progress rail are demoable.
+- Nav/CTAs use `router.push` (Button is a `<button>`), not `<a>` links.
+
+## U05 — landing story
+- Hull progress is no longer a plain page fraction: hero scroll maps to 0–0.12 and the single pinned story container to 0.12–1 (`StoryTimeline` sets it; `scrollMap.toY` converts back for the rail/nav). Mobile (<768px) and reduced motion render stacked cards with no pin, per docs/ui/04 States.
+- Ladder levels in the stepper are the UI's six (Normal…Quarantine); docs/06 defines five. Level 4 "Isolate" copy is UI-only wording.
+- Predictor sparkline and the "Why?" sentence are labelled illustrative/example (copy from docs/ui/04, not measured). Results bento uses docs/RESULTS.md §3–4 medians only, with its caveats printed under the tiles.
+- Nav "Results" scrolls to progress 0.92 (proof panel); there is no separate results section.
+
+## U06 — admin shell
+- **Isolation switch on the mock stream** is local-only (`useUi.mockIsolation`); the simulated stream has no backend to flip. Live mode calls `POST /admin/isolation`, which writes the audit event server-side.
+- **Page transition has no exit fade**: App Router unmounts the old route immediately, so only the enter animation (fade up 8 px, springSoft) is implemented.
+- **Sidebar rail below 1280 px** is forced by a media query; the `[` preference only applies on wider screens.
+
+## U07 Overview
+- `dashboard/tsconfig.json`: `allowImportingTsExtensions` so the pure selectors in `src/lib/overview.ts` can be unit-tested with `node --test src/lib/overview.test.ts` (no test runner is installed in `dashboard/`).
+- Sparklines come from a module-level 60-point buffer (`src/lib/use-kpi-history.ts`) fed by `useStream.subscribe`; the store contract is unchanged. Time-in-level uses the snapshot timestamp as the clock.
+- Disconnected banner has no reconnect countdown: the store does not expose the next retry time.
+- Legacy `LadderBadge` in `components/status.tsx` now re-exports the new `components/domain/ladder-badge.tsx`. The landing page keeps its own `landing/story/LadderStepper` until U13 cohesion.
+
+## U08 — Incidents & DecisionDrawer
+- `DecisionDrawer` is exported from `components/incidents/decision-drawer.tsx` and wired into Overview and Incidents. The legacy Audit table (`components/admin/audit.tsx`) has no per-row event ids yet, so it does not open the drawer until U11 rebuilds it; the drawer already accepts any `StreamEvent`.
+- Time-range chips are relative to the newest stream timestamp (no wall-clock reads), so a paused mock stream keeps showing its last window.
+
+## U09 — Scenario Lab & A/B
+- `useLab.start` gained an optional 4th arg `mode: "ab" | "off" | "on"` (default `"ab"`, behaviour unchanged) so the Run panel's OFF / ON / A-B selector works; single runs show one chart and ask for the other side to compare.
+- Confetti is a small motion-based burst (`components/lab/confetti.tsx`), no new dependency.
+- `lib/export.ts` PNG export now reads `--surface` / `--ink` (old `--card` / `--foreground` no longer exist).
+
+## U10 — Tenants & policy editor
+- **Endpoints**: `api.putPolicy` (`PUT /admin/tenants/{id}/policy`) and `api.setLevel` (`POST /admin/tenants/{id}/level`) were not in `api.ts`; added as thin clients for endpoints that already exist in the Go gateway and `docs/04`. No new backend endpoints.
+- **Pin range**: the pin API accepts levels 0–4 (backend ladder has 5 levels, UI shows 6). `LadderStepper` got `maxSelectable`; L5 renders disabled in the editor. Release-pin also requires a reason.
+- **View only on the mock stream**: without `NEXT_PUBLIC_WS_URL` there is no REST backend, so the editor shows tier-default quotas read-only with a "View only" chip. Real policy values appear in live/auto mode.
+- **Save is explicit** (Save policy button with diff chips) rather than debounced live-edit, so every change is one audited `policy.update`. Revert re-PUTs the pre-save policy (one level deep, this session only).
+- Legacy `components/admin/tenants.tsx` removed (replaced by `components/tenants/`).
+
+## U11 — Predictor & Audit
+- **Forecast data comes from the stream**, not REST: per-tenant/host `p_overload` in snapshots is buffered for 10 min (`lib/use-forecast-history.ts`). "Actual" is p99 (tenant) or CPU % (host). **No confidence band** is drawn: the API carries no interval, so the shaded zone is the fixed 60% early-warning threshold (`PredictObserve` default) and spans where the forecast stayed above it.
+- **Lead time is observed, not modelled**: seconds from the forecast crossing 60% to the ladder escalation (`lib/predictor.ts`). Only the *active* model has live data; the other model's row says "not measured this session" (offline comparison lives in `predictor/eval.py`). "No follow-up" counts alerts with no escalation within 30 s; it is a candidate false-alarm count, not ground truth.
+- **FeatureBars**: `/admin/predictor` does not expose feature importances (the GBM keeps them internally), so the card shows an honest empty state and renders bars only if `importance` / `feature_importance` appears in the response. Backend left untouched (out of scope for U11).
+- **Audit merges two sources**: the live stream (rich: actions, actor) and `GET /admin/events?limit=200` (history); duplicates are keyed by whole second + tenant + levels + kind. REST-only rows have no actor ("system") and no actions. Date filter is relative to the newest event (no wall clock). Virtualised above 200 rows with a fixed-height window (expanded rows are 320 px).
+- Legacy `components/admin/*` removed (all pages now live in `components/{tenants,predictor,audit}/`).
+
+## U12 — Tenant portal
+- **Gauges use what `/v1/me/*` exposes**: compute budget (cost units), request rate, parallel jobs (concurrency) and share of requests turned away. The spec's CPU / memory / DB connections / bandwidth are not in the tenant API; no backend change made.
+- **Showback rows show a share-of-bill bar instead of a per-row sparkline** (the API has no per-resource time series). History range chips (5/10/15 min) filter the 15 min `usage` series and the in-session live buffer; 1 h is not offered.
+- **API key list is a single masked row** (last 4 chars from sign-in/rotation): the API has no key list, created or last-used times. Rotate uses a confirm dialog, then a reveal-once dialog (key is dropped from memory when it closes).
+- **Recovery countdown** starts when usage is first seen back inside quota while throttled (backend steps limits down ~20 s after that); before then the banner explains the condition instead of a number.
+- Added `keyHint` to the portal session and `hasAdminSession()` to `api.ts` (for "Switch to Admin"). The portal still never mounts the admin stream.
+
+## U13 — States, responsive & a11y polish
+- `--ink-3` darkened from `#7A7A96` to `#666684` (≈4.7:1 on paper/paper-2) because it is used for 12–13px text and the old value was ~3.7:1. `docs/ui/01` updated.
+- The WS-disconnected banner moved from Overview into the admin shell (`components/shell/connection-banner.tsx`) so every admin route shows it.
+- Overview cards stack full-width and the KPI strip drops to 3 columns below 1024px; the tenants table scrolls horizontally under 960px (its sticky header no longer sticks to the page there).
+- `_tokens` and `_hull` routes left in place: U14 owns their deletion (done, see U14).
+
+## U14 — Presentation mode & final pass
+- Presentation mode additions: Overview hull grows (196 → 300 px, 7-col) and the heatmap narrows to 5 cols; Incidents hides filter row and legend caption; layout shifts reuse the existing `springSlow` sidebar transition. Scenario Lab / A/B 120 px numbers were already done in U09.
+- Scenario default seeds now follow `docs/13` (S1 = 42, S2 = 7, S6 = 99; the others stay 42) in `lib/scenarios.ts`.
+- Deleted `/_tokens`, `/_hull` demo routes (incl. the primitives gallery), the default Next favicon and starter `public/*.svg`. Added `app/icon.svg` (brand mark) and a `%s · Bulkhead` title template with per-route titles.
+- Not changed: backend, contracts, `lib/*` data modules (apart from the seed defaults above).
+
+- **Loadgen HTTP trigger added** (`loadgen serve`, `POST /run {run_id,scenario,seed,duration}`, `GET /healthz`, default `:8089`). Supersedes the "no HTTP trigger" notes above. One run at a time (409 if busy); `duration` rescales phases; S9 refused (use CLI `--heavy`). Reports via `/admin/runs/{id}/progress` and `POST /admin/runs {run_id}`; failures close the run with `{error}`. Deploy: `loadgen-serve` in `compose.loadgen.yml` on box #2 (private IP :8089), `LOADGEN_URL` on box #1.

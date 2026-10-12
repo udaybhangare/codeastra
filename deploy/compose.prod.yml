@@ -54,8 +54,24 @@ services:
       DASHBOARD_ORIGINS: https://${SITE_ADDRESS:-localhost}${CADDY_HTTPS_PORT:+:${CADDY_HTTPS_PORT}},http://localhost:3000
       ATTACH_CONTAINER: bulkheadd
       DB_PROXY_URL: http://bulkheadd:8080/internal/db
+      LOADGEN_URL: ${LOADGEN_URL:-}   # e.g. http://10.0.2.10:8089 (box #2); empty = dashboard Run button disabled
     volumes: ["/var/run/docker.sock:/var/run/docker.sock"] # needed: cgroup update + worker lifecycle
     ports: ["${BULKHEAD_BIND_IP:-127.0.0.1}:8080:8080"]
+
+  # Single-box demo: HTTP trigger for the Scenario Lab Run button (docker compose --profile loadgen up -d).
+  # Needs `deploy/build.sh loadgen`, keys.json (seed.sh; `chmod 644` — container runs non-root), LOADGEN_URL=http://loadgen-serve:8089 in .env.
+  loadgen-serve:
+    profiles: [loadgen]
+    image: bulkhead/loadgen:prod
+    command: ["serve"]
+    restart: unless-stopped
+    depends_on: [bulkheadd]
+    environment:
+      LISTEN: ":8089"
+      LOADGEN_TARGET: http://bulkheadd:8080
+      LOADGEN_KEYS_FILE: /keys.json
+      LOADGEN_ADMIN_KEY: ${ADMIN_API_KEY:?}
+    volumes: ["./keys.json:/keys.json:ro"]
 
   dashboard:
     image: bulkhead/dashboard:prod

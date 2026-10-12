@@ -28,6 +28,8 @@ export type HullProps = {
   scrollProgress?: number;
   /** Optional host gauge for the keel. */
   host?: { cpu_util: number; mem_util: number };
+  /** Disables cursor parallax (prefers-reduced-motion). */
+  reducedMotion?: boolean;
   className?: string;
 };
 
