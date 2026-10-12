@@ -1,0 +1,47 @@
+# Dev stack: only postgres + redis run for real. Other services are placeholders
+# (profile "later") filled in by later prompts; they don't start with `make dev`.
+name: bulkhead-dev
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bulkhead}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bulkhead}
+      POSTGRES_DB: ${POSTGRES_DB:-bulkhead}
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bulkhead}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7
+    ports: ["${REDIS_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # --- placeholders (prompts 01+, 11, 15, 18) ---
+  bulkheadd:
+    profiles: [later]
+    image: busybox:1.36
+    command: ["true"]
+  predictor:
+    profiles: [later]
+    image: busybox:1.36
+    command: ["true"]
+  dashboard:
+    profiles: [later]
+    image: busybox:1.36
+    command: ["true"]
+  caddy:
+    profiles: [later]
+    image: busybox:1.36
+    command: ["true"]
+
+volumes:
+  pgdata:

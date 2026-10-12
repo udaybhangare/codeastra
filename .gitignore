@@ -1,0 +1,8 @@
+.env
+node_modules/
+.next/
+predictor/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+bin/

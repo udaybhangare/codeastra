@@ -1,0 +1,366 @@
+openapi: 3.0.3
+info:
+  title: Bulkhead API
+  version: 0.1.0
+  description: Tenant and admin API (docs/04). Frozen contract; change only with team sign-off.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: tenant
+  - name: admin
+components:
+  securitySchemes:
+    tenantJWT: { type: http, scheme: bearer, bearerFormat: JWT }
+    adminJWT: { type: http, scheme: bearer, bearerFormat: JWT, description: "role=admin claim" }
+    apiKey: { type: apiKey, in: header, name: X-API-Key }
+  schemas:
+    Tier: { type: string, enum: [free, pro, enterprise] }
+    TenantStatus: { type: string, enum: [active, suspended] }
+    ThrottleLevel:
+      type: integer
+      minimum: 0
+      maximum: 5
+      description: "0 normal, 1 watch, 2 soft-throttle, 3 hard-throttle, 4 quarantine, 5 block"
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        reason: { type: string }
+        retry_after_s: { type: number }
+    TokenResponse:
+      type: object
+      required: [token, expires_in, tenant_id, tier]
+      properties:
+        token: { type: string }
+        expires_in: { type: integer, example: 900 }
+        tenant_id: { type: string }
+        tier: { $ref: '#/components/schemas/Tier' }
+    InvokeResult:
+      type: object
+      properties:
+        task: { type: string }
+        ok: { type: boolean }
+        cost_units: { type: number }
+        exec_ms: { type: number }
+        result: { type: object, additionalProperties: true }
+    Policy:
+      type: object
+      required: [tenant_id, tier, weight]
+      properties:
+        tenant_id: { type: string }
+        tier: { $ref: '#/components/schemas/Tier' }
+        weight: { type: number }
+        reserve_cpu: { type: number }
+        limit_cpu: { type: number }
+        limit_mem_mb: { type: integer }
+        rps: { type: number }
+        burst: { type: number }
+        cost_per_s: { type: number }
+        concurrency: { type: integer }
+        queue_depth: { type: integer }
+        db_conns: { type: integer }
+        bandwidth_bps: { type: integer }
+        updated_at: { type: string, format: date-time }
+    TenantMetrics:
+      type: object
+      required: [tenant_id, level]
+      properties:
+        tenant_id: { type: string }
+        level: { $ref: '#/components/schemas/ThrottleLevel' }
+        rps: { type: number }
+        ok_rps: { type: number }
+        rejected_rps: { type: number }
+        cost_units_s: { type: number }
+        queue_depth: { type: integer }
+        inflight: { type: integer }
+        p50_ms: { type: number }
+        p95_ms: { type: number }
+        p99_ms: { type: number }
+        queue_wait_p95_ms: { type: number }
+        cpu_share: { type: number }
+        mem_mb: { type: number }
+        db_conns: { type: integer }
+        bytes_s: { type: number }
+        p_overload: { type: number }
+    Tenant:
+      type: object
+      required: [id, name, tier, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        tier: { $ref: '#/components/schemas/Tier' }
+        status: { $ref: '#/components/schemas/TenantStatus' }
+        created_at: { type: string, format: date-time }
+        policy: { $ref: '#/components/schemas/Policy' }
+        metrics: { $ref: '#/components/schemas/TenantMetrics' }
+    Usage:
+      type: object
+      properties:
+        window_start: { type: string, format: date-time }
+        req: { type: integer }
+        ok: { type: integer }
+        rejected: { type: integer }
+        cpu_ms: { type: number }
+        mem_mb_s: { type: number }
+        db_ms: { type: number }
+        bytes: { type: integer }
+        cost_units: { type: number }
+        p99_ms: { type: number }
+        quota: { $ref: '#/components/schemas/Policy' }
+    ThrottleState:
+      type: object
+      required: [level, explanation]
+      properties:
+        level: { $ref: '#/components/schemas/ThrottleLevel' }
+        since: { type: string, format: date-time }
+        explanation: { type: string }
+        evidence: { type: object, additionalProperties: true }
+        actions: { type: array, items: { type: string } }
+    Showback:
+      type: object
+      properties:
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        total_cost_units: { type: number }
+        breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              task: { type: string }
+              req: { type: integer }
+              cost_units: { type: number }
+    ThrottleEvent:
+      type: object
+      required: [id, ts, tenant_id, from_level, to_level, reason]
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        tenant_id: { type: string }
+        from_level: { $ref: '#/components/schemas/ThrottleLevel' }
+        to_level: { $ref: '#/components/schemas/ThrottleLevel' }
+        reason: { type: string }
+        evidence: { type: object, additionalProperties: true }
+        actions: { type: array, items: { type: object, additionalProperties: true } }
+        actor: { type: string, description: "detector | predictor | admin:<id>" }
+    Run:
+      type: object
+      required: [id, scenario, seed, isolation_mode, started_at]
+      properties:
+        id: { type: string }
+        scenario: { type: string }
+        seed: { type: integer }
+        isolation_mode: { type: string, enum: ['on', 'off'] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        summary: { type: object, additionalProperties: true }
+  headers:
+    XTenant: { schema: { type: string } }
+    XQueueWaitMs: { schema: { type: number } }
+    XCostUnits: { schema: { type: number } }
+    XThrottleLevel: { schema: { type: integer } }
+    XReason: { schema: { type: string } }
+    RetryAfter: { schema: { type: integer } }
+  responses:
+    Rejected:
+      description: Rejected by admission (429 rate/quota, 503 overload/queue full)
+      headers:
+        X-Reason: { $ref: '#/components/headers/XReason' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json: { schema: { $ref: '#/components/schemas/Error' } }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json: { schema: { $ref: '#/components/schemas/Error' } }
+paths:
+  /v1/auth/token:
+    post:
+      tags: [tenant]
+      summary: Mint a 15-minute JWT from an API key
+      operationId: mintToken
+      security: [{ apiKey: [] }]
+      responses:
+        '200':
+          description: JWT
+          content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/invoke/{task}:
+    post:
+      tags: [tenant]
+      summary: Run a task
+      operationId: invoke
+      security: [{ tenantJWT: [] }]
+      parameters:
+        - { name: task, in: path, required: true, schema: { type: string, enum: [echo, cpu-burn, mem-alloc, db-query, payload] } }
+      requestBody:
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200':
+          description: Task result
+          headers:
+            X-Tenant: { $ref: '#/components/headers/XTenant' }
+            X-Queue-Wait-Ms: { $ref: '#/components/headers/XQueueWaitMs' }
+            X-Cost-Units: { $ref: '#/components/headers/XCostUnits' }
+            X-Throttle-Level: { $ref: '#/components/headers/XThrottleLevel' }
+          content: { application/json: { schema: { $ref: '#/components/schemas/InvokeResult' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/Rejected' }
+        '503': { $ref: '#/components/responses/Rejected' }
+  /v1/me/usage:
+    get:
+      tags: [tenant]
+      operationId: myUsage
+      security: [{ tenantJWT: [] }]
+      responses:
+        '200': { description: Usage vs quota, content: { application/json: { schema: { $ref: '#/components/schemas/Usage' } } } }
+  /v1/me/throttle:
+    get:
+      tags: [tenant]
+      operationId: myThrottle
+      security: [{ tenantJWT: [] }]
+      responses:
+        '200': { description: Throttle state, content: { application/json: { schema: { $ref: '#/components/schemas/ThrottleState' } } } }
+  /v1/me/showback:
+    get:
+      tags: [tenant]
+      operationId: myShowback
+      security: [{ tenantJWT: [] }]
+      responses:
+        '200': { description: Cost breakdown, content: { application/json: { schema: { $ref: '#/components/schemas/Showback' } } } }
+  /admin/tenants:
+    get:
+      tags: [admin]
+      operationId: listTenants
+      security: [{ adminJWT: [] }]
+      responses:
+        '200':
+          description: Tenants with live metrics
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Tenant' } } } }
+  /admin/tenants/{id}:
+    get:
+      tags: [admin]
+      operationId: getTenant
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Tenant detail, content: { application/json: { schema: { $ref: '#/components/schemas/Tenant' } } } }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /admin/tenants/{id}/policy:
+    put:
+      tags: [admin]
+      summary: Change quotas live
+      operationId: putPolicy
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Policy' } } }
+      responses:
+        '200': { description: Updated policy, content: { application/json: { schema: { $ref: '#/components/schemas/Policy' } } } }
+  /admin/tenants/{id}/level:
+    post:
+      tags: [admin]
+      summary: Pin or unpin a throttle level
+      operationId: setLevel
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              properties:
+                level: { allOf: [{ $ref: '#/components/schemas/ThrottleLevel' }], nullable: true, description: "null unpins" }
+                reason: { type: string }
+      responses:
+        '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/ThrottleState' } } } }
+  /admin/events:
+    get:
+      tags: [admin]
+      summary: Decision log
+      operationId: listEvents
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: since, in: query, schema: { type: string, format: date-time } }]
+      responses:
+        '200': { description: Events, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ThrottleEvent' } } } } }
+  /admin/isolation:
+    post:
+      tags: [admin]
+      summary: A/B isolation toggle
+      operationId: setIsolation
+      security: [{ adminJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties: { mode: { type: string, enum: ['on', 'off'] } }
+      responses:
+        '200':
+          description: Current mode
+          content:
+            application/json:
+              schema: { type: object, properties: { mode: { type: string, enum: ['on', 'off'] } } }
+  /admin/scenarios/{name}/run:
+    post:
+      tags: [admin]
+      operationId: runScenario
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seed]
+              properties:
+                seed: { type: integer }
+                duration: { type: integer, description: seconds }
+      responses:
+        '202': { description: Run started, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+  /admin/runs:
+    get:
+      tags: [admin]
+      operationId: listRuns
+      security: [{ adminJWT: [] }]
+      responses:
+        '200': { description: Runs, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Run' } } } } }
+  /admin/runs/{id}:
+    get:
+      tags: [admin]
+      operationId: getRun
+      security: [{ adminJWT: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Run with summary, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+  /admin/predictor:
+    get:
+      tags: [admin]
+      operationId: predictorState
+      security: [{ adminJWT: [] }]
+      responses:
+        '200':
+          description: Predictor state and accuracy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model: { type: string, enum: [baseline, gbm] }
+                  healthy: { type: boolean }
+                  accuracy: { type: object, additionalProperties: true }
+  /admin/stream:
+    get:
+      tags: [admin]
+      summary: WebSocket upgrade; 1 Hz snapshot + events. Messages follow ws-messages.schema.json.
+      operationId: adminStream
+      security: [{ adminJWT: [] }]
+      responses:
+        '101': { description: Switching protocols }

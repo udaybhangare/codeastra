@@ -1,0 +1,221 @@
+{
+  "id": "S8",
+  "name": "bandwidth-flood",
+  "description": "rogue-ml sends large payloads; bandwidth bucket enforced, others' throughput stable",
+  "default_seed": 42,
+  "phases": [
+    {
+      "name": "warmup",
+      "duration_s": 20
+    },
+    {
+      "name": "attack",
+      "duration_s": 60
+    },
+    {
+      "name": "cooldown",
+      "duration_s": 30
+    }
+  ],
+  "tenants": [
+    {
+      "tenant": "acme-shop",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "data-co",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "bursty-news",
+      "role": "bystander",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "rogue-ml",
+      "role": "culprit",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 1,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 10,
+          "task_mix": [
+            {
+              "task": "payload",
+              "weight": 1,
+              "payload_bytes": 1000000
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 1,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "metric": "victim_throughput_ratio",
+      "op": ">=",
+      "value": 0.9
+    },
+    {
+      "metric": "victim_p99_inflation",
+      "op": "<=",
+      "value": 2
+    }
+  ]
+}

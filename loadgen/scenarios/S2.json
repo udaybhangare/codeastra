@@ -1,0 +1,236 @@
+{
+  "id": "S2",
+  "name": "memory-bomb",
+  "description": "rogue-ml allocates 4GB; only its container is OOM-killed and restarted",
+  "default_seed": 42,
+  "phases": [
+    {
+      "name": "warmup",
+      "duration_s": 20
+    },
+    {
+      "name": "attack",
+      "duration_s": 60
+    },
+    {
+      "name": "cooldown",
+      "duration_s": 30
+    }
+  ],
+  "tenants": [
+    {
+      "tenant": "acme-shop",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "data-co",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "leaky-app",
+      "role": "bystander",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 2,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 16,
+                "hold_ms": 500
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 2,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 16,
+                "hold_ms": 500
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 2,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 16,
+                "hold_ms": 500
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "rogue-ml",
+      "role": "culprit",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 1,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 0.5,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 4096,
+                "hold_ms": 3000
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 1,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "metric": "victim_errors",
+      "op": "==",
+      "value": 0
+    },
+    {
+      "metric": "victim_p99_inflation",
+      "op": "<=",
+      "value": 2
+    }
+  ]
+}

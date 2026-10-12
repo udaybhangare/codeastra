@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bulkhead.local/contracts/ws-messages.schema.json",
+  "title": "Bulkhead admin stream message",
+  "description": "Every message on /admin/stream. Discriminated by `type`.",
+  "oneOf": [
+    { "$ref": "#/$defs/snapshot" },
+    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/run_progress" },
+    { "$ref": "#/$defs/run_result" }
+  ],
+  "$defs": {
+    "level": { "type": "integer", "minimum": 0, "maximum": 5 },
+    "tenantMetrics": {
+      "type": "object",
+      "required": ["tenant_id", "tier", "level", "rps", "p50_ms", "p95_ms", "p99_ms", "queue_depth", "cpu_share", "mem_mb"],
+      "additionalProperties": false,
+      "properties": {
+        "tenant_id": { "type": "string" },
+        "tier": { "enum": ["free", "pro", "enterprise"] },
+        "level": { "$ref": "#/$defs/level" },
+        "rps": { "type": "number", "minimum": 0 },
+        "ok_rps": { "type": "number", "minimum": 0 },
+        "rejected_rps": { "type": "number", "minimum": 0 },
+        "cost_units_s": { "type": "number", "minimum": 0 },
+        "queue_depth": { "type": "integer", "minimum": 0 },
+        "inflight": { "type": "integer", "minimum": 0 },
+        "p50_ms": { "type": "number", "minimum": 0 },
+        "p95_ms": { "type": "number", "minimum": 0 },
+        "p99_ms": { "type": "number", "minimum": 0 },
+        "queue_wait_p95_ms": { "type": "number", "minimum": 0 },
+        "cpu_share": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mem_mb": { "type": "number", "minimum": 0 },
+        "db_conns": { "type": "integer", "minimum": 0 },
+        "bytes_s": { "type": "number", "minimum": 0 },
+        "p_overload": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["type", "ts", "isolation", "host", "tenants"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "snapshot" },
+        "ts": { "type": "string", "format": "date-time" },
+        "isolation": { "enum": ["on", "off"] },
+        "host": {
+          "type": "object",
+          "required": ["cpu_util", "mem_util"],
+          "additionalProperties": false,
+          "properties": {
+            "cpu_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "mem_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "db_conn_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "p_overload": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "fairness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "jain": { "type": "number", "minimum": 0, "maximum": 1 },
+            "victim_inflation": { "type": "number", "minimum": 0 }
+          }
+        },
+        "tenants": { "type": "array", "items": { "$ref": "#/$defs/tenantMetrics" } }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["type", "ts", "kind", "tenant_id", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "event" },
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "enum": ["throttle", "predict", "oom", "isolation", "admin"] },
+        "tenant_id": { "type": "string" },
+        "from_level": { "$ref": "#/$defs/level" },
+        "to_level": { "$ref": "#/$defs/level" },
+        "message": { "type": "string" },
+        "evidence": { "type": "object" },
+        "actions": { "type": "array", "items": { "type": "object" } },
+        "actor": { "type": "string" }
+      }
+    },
+    "run_progress": {
+      "type": "object",
+      "required": ["type", "run_id", "scenario", "phase", "elapsed_s", "total_s"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "run_progress" },
+        "run_id": { "type": "string" },
+        "scenario": { "type": "string" },
+        "isolation": { "enum": ["on", "off"] },
+        "phase": { "enum": ["warmup", "attack", "cooldown"] },
+        "elapsed_s": { "type": "number", "minimum": 0 },
+        "total_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "run_result": {
+      "type": "object",
+      "required": ["type", "run_id", "scenario", "isolation", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "run_result" },
+        "run_id": { "type": "string" },
+        "scenario": { "type": "string" },
+        "isolation": { "enum": ["on", "off"] },
+        "summary": { "type": "object" }
+      }
+    }
+  }
+}

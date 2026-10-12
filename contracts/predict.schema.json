@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bulkhead.local/contracts/predict.schema.json",
+  "title": "Bulkhead predictor contract",
+  "description": "POST /predict request and response (docs/07).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["ts", "tenants", "host"],
+      "additionalProperties": false,
+      "properties": {
+        "ts": { "type": "string", "format": "date-time" },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "features"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "features": { "type": "array", "items": { "type": "number" }, "description": "Ordered per-second feature vector; order fixed by `feature_names` in docs/07." },
+              "feature_names": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "mem_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "db_conn_util": { "type": "number", "minimum": 0, "maximum": 1 },
+            "capacity_cost_units_s": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["p_overload_host", "tenants", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "p_overload_host": { "type": "number", "minimum": 0, "maximum": 1 },
+        "model": { "enum": ["baseline", "gbm"] },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "p_overload", "top_factor", "eta_s"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "p_overload": { "type": "number", "minimum": 0, "maximum": 1 },
+              "top_factor": { "type": "string" },
+              "eta_s": { "type": ["number", "null"], "minimum": 0, "description": "Seconds until predicted overload; null if none." }
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ]
+}

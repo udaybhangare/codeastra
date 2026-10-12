@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bulkhead.local/contracts/scenario.schema.json",
+  "title": "Bulkhead scenario spec",
+  "description": "Seeded, deterministic scenario (docs/09). Same (scenario, seed) => identical request schedule.",
+  "type": "object",
+  "required": ["name", "phases", "tenants"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "id": { "type": "string", "pattern": "^S[0-9]+$" },
+    "default_seed": { "type": "integer" },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "duration_s"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "enum": ["warmup", "attack", "cooldown"] },
+          "duration_s": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "tenants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["tenant", "role", "arrivals"],
+        "additionalProperties": false,
+        "properties": {
+          "tenant": { "type": "string" },
+          "role": { "enum": ["victim", "culprit", "false_positive_probe", "bystander"] },
+          "arrivals": {
+            "type": "array",
+            "description": "Per-phase arrival process.",
+            "items": {
+              "type": "object",
+              "required": ["phase", "process", "rps"],
+              "additionalProperties": false,
+              "properties": {
+                "phase": { "enum": ["warmup", "attack", "cooldown"] },
+                "process": { "enum": ["poisson", "burst", "ramp", "constant"] },
+                "rps": { "type": "number", "minimum": 0 },
+                "rps_end": { "type": "number", "minimum": 0, "description": "ramp target" },
+                "burst_multiplier": { "type": "number", "minimum": 1 },
+                "burst_duration_s": { "type": "number", "minimum": 0 },
+                "retry_without_backoff": { "type": "boolean" },
+                "task_mix": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["task", "weight"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "task": { "enum": ["echo", "cpu-burn", "mem-alloc", "db-query", "payload"] },
+                      "weight": { "type": "number", "exclusiveMinimum": 0 },
+                      "params": { "type": "object" },
+                      "payload_bytes": { "type": "integer", "minimum": 0 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["metric", "op", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "metric": { "type": "string", "examples": ["victim_p99_inflation", "false_positive_count", "jain", "victim_errors", "time_to_mitigate_s"] },
+          "op": { "enum": ["<=", ">=", "==", "<", ">"] },
+          "value": { "type": "number" },
+          "applies_to": { "type": "string" }
+        }
+      }
+    }
+  }
+}

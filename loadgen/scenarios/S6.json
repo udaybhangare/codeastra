@@ -1,0 +1,183 @@
+{
+  "id": "S6",
+  "name": "legit-flash-crowd",
+  "description": "bursty-news legitimately spikes 10x for 20s within its limits; must not be quarantined",
+  "default_seed": 42,
+  "phases": [
+    {
+      "name": "warmup",
+      "duration_s": 20
+    },
+    {
+      "name": "attack",
+      "duration_s": 60
+    },
+    {
+      "name": "cooldown",
+      "duration_s": 30
+    }
+  ],
+  "tenants": [
+    {
+      "tenant": "acme-shop",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 30,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "data-co",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 8,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "bursty-news",
+      "role": "false_positive_probe",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "burst",
+          "rps": 5,
+          "burst_multiplier": 10,
+          "burst_duration_s": 20,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "metric": "false_positive_count",
+      "op": "==",
+      "value": 0
+    },
+    {
+      "metric": "victim_p99_inflation",
+      "op": "<=",
+      "value": 1.5
+    }
+  ]
+}
