@@ -27,6 +27,12 @@ var Tenants = []Tenant{
 	{"bursty-news", "Bursty News", policy.TierFree},
 	{"rogue-ml", "Rogue ML", policy.TierFree},
 	{"leaky-app", "Leaky App", policy.TierPro},
+	// One culprit per resource, used by S10-MARATHON so each climbs the
+	// ladder for its own reason (CPU / DB / queue / bandwidth).
+	{"cpu-hog", "CPU Hog", policy.TierFree},
+	{"db-hog", "DB Hog", policy.TierFree},
+	{"queue-storm", "Queue Storm", policy.TierFree},
+	{"bw-hog", "Bandwidth Hog", policy.TierFree},
 }
 
 // HashKey is how API keys are stored (sha256 hex). Keys are high-entropy random, so a

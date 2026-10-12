@@ -1,0 +1,21 @@
+# Dashboard (Next.js). Context: dashboard/. NEXT_PUBLIC_* are baked in at build time.
+FROM node:22-alpine AS build
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+ARG NEXT_PUBLIC_API_URL=""
+ARG NEXT_PUBLIC_WS_URL=""
+ENV NEXT_TELEMETRY_DISABLED=1
+# WS url "auto" => live same-origin backend with in-browser admin sign-in; empty => built-in mock mode
+RUN if [ -z "$NEXT_PUBLIC_WS_URL" ]; then unset NEXT_PUBLIC_WS_URL; fi; pnpm build
+
+FROM node:22-alpine
+RUN corepack enable
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+COPY --from=build --chown=node:node /app ./
+USER node
+EXPOSE 3000
+CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]

@@ -1,0 +1,352 @@
+{
+  "id": "S9-LITE",
+  "name": "gauntlet-lite",
+  "description": "LAPTOP-SAFE S9: same shape (all attacks at once + bursty-news spike) at ~1/10 the CPU and ~1/10 the memory (peak ~1 GB, <2 cores), 60 s attack. Full S9 is for the 2-box AWS setup.",
+  "default_seed": 42,
+  "phases": [
+    {
+      "name": "warmup",
+      "duration_s": 10
+    },
+    {
+      "name": "attack",
+      "duration_s": 60
+    },
+    {
+      "name": "cooldown",
+      "duration_s": 20
+    }
+  ],
+  "tenants": [
+    {
+      "tenant": "acme-shop",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 15.0,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 15.0,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 15.0,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 0.85
+            },
+            {
+              "task": "db-query",
+              "weight": 0.15,
+              "params": {
+                "n": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "data-co",
+      "role": "victim",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 4.0,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 4.0,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 4.0,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "bursty-news",
+      "role": "false_positive_probe",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "burst",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ],
+          "burst_multiplier": 10,
+          "burst_duration_s": 20
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 5,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "leaky-app",
+      "role": "culprit",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 0.8,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 16,
+                "hold_ms": 500
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 2.0,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 128,
+                "hold_ms": 2000
+              }
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 0.8,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 16,
+                "hold_ms": 500
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tenant": "rogue-ml",
+      "role": "culprit",
+      "arrivals": [
+        {
+          "phase": "warmup",
+          "process": "poisson",
+          "rps": 0.4,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 4.0,
+          "task_mix": [
+            {
+              "task": "cpu-burn",
+              "weight": 1,
+              "params": {
+                "ms": 200
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 1.6,
+          "task_mix": [
+            {
+              "task": "db-query",
+              "weight": 1,
+              "params": {
+                "n": 50
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 0.2,
+          "task_mix": [
+            {
+              "task": "mem-alloc",
+              "weight": 1,
+              "params": {
+                "mb": 512,
+                "hold_ms": 3000
+              }
+            }
+          ]
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 5.0,
+          "task_mix": [
+            {
+              "task": "cpu-burn",
+              "weight": 1,
+              "params": {
+                "ms": 100
+              }
+            }
+          ],
+          "retry_without_backoff": true
+        },
+        {
+          "phase": "attack",
+          "process": "ramp",
+          "rps": 0.8,
+          "task_mix": [
+            {
+              "task": "cpu-burn",
+              "weight": 1,
+              "params": {
+                "ms": 100
+              }
+            }
+          ],
+          "rps_end": 6.0
+        },
+        {
+          "phase": "attack",
+          "process": "poisson",
+          "rps": 2.0,
+          "task_mix": [
+            {
+              "task": "payload",
+              "weight": 1,
+              "payload_bytes": 1000000
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "process": "poisson",
+          "rps": 0.4,
+          "task_mix": [
+            {
+              "task": "echo",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "metric": "victim_p99_inflation",
+      "op": "<=",
+      "value": 2
+    },
+    {
+      "metric": "victim_errors",
+      "op": "==",
+      "value": 0
+    },
+    {
+      "metric": "false_positive_count",
+      "op": "==",
+      "value": 0
+    }
+  ]
+}

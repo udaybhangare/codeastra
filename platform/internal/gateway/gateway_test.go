@@ -52,11 +52,13 @@ type env struct {
 	audit *MemAuditor
 }
 
-func newEnv() *env {
+func newEnv() *env { return newEnvWith(nil) }
+
+func newEnvWith(mod func(*Deps)) *env {
 	now := time.Unix(1_700_000_000, 0)
 	e := &env{clock: &now, audit: &MemAuditor{}}
 	nowFn := func() time.Time { return *e.clock }
-	s := New(Deps{
+	d := Deps{
 		TenantSigner: auth.NewSigner("tenant-secret-0123456789", nowFn),
 		AdminSigner:  auth.NewSigner("admin-secret-0123456789", nowFn),
 		Auth: &auth.Authenticator{Store: fakeKeys{
@@ -75,7 +77,11 @@ func newEnv() *env {
 			}, Tier: func(id string) string { return map[string]string{"tenant-a": "pro", "tenant-b": "free"}[id] }},
 		AdminKey: "admin-api-key-0123456789",
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	}
+	if mod != nil {
+		mod(&d)
+	}
+	s := New(d)
 	e.h = s.Handler()
 	return e
 }

@@ -1,7 +1,7 @@
 {
   "id": "S1",
   "name": "cpu-flood",
-  "description": "rogue-ml floods 20 rps of 2s cpu-burn; expect L3 within 8s, victim p99 <= 1.5x baseline",
+  "description": "rogue-ml floods 20 rps of 2s cpu-burn; expect victim p99 <= 1.5x baseline and abuser goodput contained (<= 1 rps)",
   "default_seed": 42,
   "phases": [
     {
@@ -215,9 +215,9 @@
       "value": 1.5
     },
     {
-      "metric": "time_to_mitigate_s",
+      "metric": "abuser_goodput_rps",
       "op": "<=",
-      "value": 8
+      "value": 1
     }
   ]
 }

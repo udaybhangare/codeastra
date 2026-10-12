@@ -18,6 +18,16 @@ type Scenario struct {
 	Phases      []Phase      `json:"phases"`
 	Tenants     []TenantSpec `json:"tenants"`
 	Assertions  []Assertion  `json:"assertions,omitempty"`
+	Waves       []Wave       `json:"waves,omitempty"`
+}
+
+// Wave labels a slice of the attack phase (seconds from attack start) so a
+// long scenario can be reported per attack kind (cpu, memory, db, ...).
+type Wave struct {
+	Name   string  `json:"name"`
+	Kind   string  `json:"kind,omitempty"`
+	StartS float64 `json:"start_s"`
+	EndS   float64 `json:"end_s"`
 }
 
 type Phase struct {
@@ -39,6 +49,8 @@ type Arrival struct {
 	BurstMultiplier     float64   `json:"burst_multiplier,omitempty"`
 	BurstDurationS      float64   `json:"burst_duration_s,omitempty"`
 	RetryWithoutBackoff bool      `json:"retry_without_backoff,omitempty"`
+	StartS              float64   `json:"start_s,omitempty"` // arrivals only from this offset in the phase
+	EndS                float64   `json:"end_s,omitempty"`   // ...until this offset (0 = phase end)
 	TaskMix             []TaskMix `json:"task_mix,omitempty"`
 }
 
@@ -106,6 +118,9 @@ func (s *Scenario) Validate() error {
 			if !have[a.Phase] || !processes[a.Process] || a.RPS < 0 || a.RPSEnd < 0 {
 				return fmt.Errorf("scenario %s: tenant %s: bad arrival (phase %q process %q)", s.Name, t.Tenant, a.Phase, a.Process)
 			}
+			if a.StartS < 0 || a.EndS < 0 || (a.EndS != 0 && a.EndS <= a.StartS) {
+				return fmt.Errorf("scenario %s: tenant %s: bad start_s/end_s", s.Name, t.Tenant)
+			}
 			if a.BurstMultiplier != 0 && a.BurstMultiplier < 1 {
 				return fmt.Errorf("scenario %s: tenant %s: burst_multiplier < 1", s.Name, t.Tenant)
 			}
@@ -135,6 +150,27 @@ func (s *Scenario) Scaled(f float64) *Scenario {
 	for i, p := range s.Phases {
 		p.DurationS = max(1, int(float64(p.DurationS)*f+0.5))
 		c.Phases[i] = p
+	}
+	return &c
+}
+
+// WithLoad returns a copy with every arrival rate (rps, rps_end) multiplied
+// by f. Task sizes (ms/mb/n) are untouched; durations are unchanged.
+func (s *Scenario) WithLoad(f float64) *Scenario {
+	if f <= 0 || f == 1 {
+		return s
+	}
+	c := *s
+	c.Tenants = make([]TenantSpec, len(s.Tenants))
+	for i, t := range s.Tenants {
+		arr := make([]Arrival, len(t.Arrivals))
+		for j, a := range t.Arrivals {
+			a.RPS *= f
+			a.RPSEnd *= f
+			arr[j] = a
+		}
+		t.Arrivals = arr
+		c.Tenants[i] = t
 	}
 	return &c
 }

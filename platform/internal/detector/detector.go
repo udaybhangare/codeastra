@@ -53,6 +53,9 @@ type Evidence struct {
 	Resources []ResourceEvidence `json:"resources"` // against the worst-hit victim
 	Victims   []VictimEvidence   `json:"victims"`
 	Tau       float64            `json:"tau"`
+	// Predicted is the predictor's p_overload for the culprit when the finding
+	// was made: extra evidence only, never part of the score (docs/07).
+	Predicted *float64 `json:"predictor_score,omitempty"`
 }
 
 // Finding names a culprit, how sure we are, whom it hurts and why.

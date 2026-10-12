@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -82,4 +83,37 @@ func (s PGKeyStore) ByPrefix(ctx context.Context, prefix string) ([]KeyRecord, e
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// NewKey returns a fresh raw API key ("bk_" + 192 random bits) and its stored prefix.
+func NewKey() (raw, prefix string, err error) {
+	b := make([]byte, 24)
+	if _, err = rand.Read(b); err != nil {
+		return "", "", err
+	}
+	raw = "bk_" + hex.EncodeToString(b)
+	return raw, raw[:prefixLen], nil
+}
+
+// Rotate revokes the tenant's active keys and issues one new key, atomically.
+// The raw key is returned once and never stored.
+func (s PGKeyStore) Rotate(ctx context.Context, tenantID string) (string, error) {
+	raw, prefix, err := NewKey()
+	if err != nil {
+		return "", err
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `UPDATE api_keys SET revoked_at = now()
+		WHERE tenant_id=$1 AND revoked_at IS NULL`, tenantID); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO api_keys (tenant_id, key_hash, prefix) VALUES ($1,$2,$3)`,
+		tenantID, HashKey(raw), prefix); err != nil {
+		return "", err
+	}
+	return raw, tx.Commit(ctx)
 }

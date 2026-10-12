@@ -1,5 +1,7 @@
 # 08 — Frontend & UX Spec
 
+> **Visual redesign:** the look & feel, landing page and component designs are superseded by `docs/ui/` (build via `prompts/ui/U01–U14`). Personas, screens and data flow below still apply.
+
 Stack: Next.js (App Router) + TS + Tailwind + shadcn/ui + Recharts; data via REST + one WebSocket (`/admin/stream`). Dark theme, ops-console feel. Goal: a judge understands the story in 30 seconds without narration.
 
 ## Personas

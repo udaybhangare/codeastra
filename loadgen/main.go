@@ -47,7 +47,7 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   loadgen list
-  loadgen schedule <S1..S8|file.json> [--seed N] [--scale F]      print schedule hash/summary
+  loadgen schedule <S1..S9|file.json> [--seed N] [--scale F]      print schedule hash/summary
   loadgen run <scenario> [--seed N] [--mode on|off] [flags]
   loadgen ab  <scenario> [--seed N] [flags]                       OFF then ON, same seed
 flags: --target URL (LOADGEN_TARGET) --keys file.json (LOADGEN_KEYS_FILE; {"tenant":"api-key"})
@@ -56,7 +56,7 @@ env:   LOADGEN_ADMIN_TOKEN | LOADGEN_ADMIN_KEY   (isolation toggle + run storage
 	os.Exit(2)
 }
 
-func loadScenario(ref string, scale float64) (*lg.Scenario, error) {
+func loadScenario(ref string, scale, load float64) (*lg.Scenario, error) {
 	var sc *lg.Scenario
 	var err error
 	if strings.HasSuffix(ref, ".json") {
@@ -70,7 +70,7 @@ func loadScenario(ref string, scale float64) (*lg.Scenario, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sc.Scaled(scale), nil
+	return sc.Scaled(scale).WithLoad(load), nil
 }
 
 func list() error {
@@ -92,7 +92,8 @@ func list() error {
 type common struct {
 	fs                *flag.FlagSet
 	seed              *int64
-	scale             *float64
+	scale, load       *float64
+	heavy             *bool
 	target, keys, out *string
 	mode              *string
 	asJSON            *bool
@@ -105,6 +106,8 @@ func newFlags(name string) *common {
 	return &common{fs: f,
 		seed:        f.Int64("seed", -1, "PRNG seed (default: scenario default_seed)"),
 		scale:       f.Float64("scale", 1, "multiply phase durations (smoke runs)"),
+		load:        f.Float64("load", 1, "multiply every arrival rate (e.g. 0.2 = 20% of the requests/s); task sizes unchanged"),
+		heavy:       f.Bool("heavy", false, "allow full S9, which needs ~16 GB RAM / 60+ cores of demand (use S9-LITE on a laptop)"),
 		target:      f.String("target", os.Getenv("LOADGEN_TARGET"), "platform base URL"),
 		keys:        f.String("keys", os.Getenv("LOADGEN_KEYS_FILE"), "JSON map tenant -> API key"),
 		out:         f.String("out", "runs", "directory for result JSON ('' to skip)"),
@@ -130,7 +133,7 @@ func cmdSchedule(args []string) error {
 	if ref == "" && c.fs.NArg() > 0 {
 		ref = c.fs.Arg(0)
 	}
-	sc, err := loadScenario(ref, *c.scale)
+	sc, err := loadScenario(ref, *c.scale, *c.load)
 	if err != nil {
 		return err
 	}
@@ -165,7 +168,10 @@ func cmdRun(ctx context.Context, args []string, ab bool) error {
 	if ref == "" || *c.target == "" || *c.keys == "" {
 		usage()
 	}
-	sc, err := loadScenario(ref, *c.scale)
+	if strings.EqualFold(strings.TrimSuffix(ref, ".json"), "S9") && !*c.heavy {
+		return fmt.Errorf("S9 demands ~16 GB RAM and 60+ cores and can crash a laptop: run S9-LITE, or pass --heavy on the AWS box")
+	}
+	sc, err := loadScenario(ref, *c.scale, *c.load)
 	if err != nil {
 		return err
 	}
@@ -195,7 +201,10 @@ func cmdRun(ctx context.Context, args []string, ab bool) error {
 	ec.MaxInflight = *c.maxInflight
 	cfg := lg.RunConfig{Scenario: sc, Seed: seed, Sender: sender, Clock: clock, Exec: ec, Admin: admin, Mode: *c.mode,
 		Progress: func(phase string, p lg.Progress) {
-			fmt.Fprintf(os.Stderr, "[%4.0fs %-8s] sent=%d ok=%d rej=%d err=%d drop=%d\n",
+			if w := lg.WaveAt(sc, p.Elapsed); w != "" {
+				phase += ":" + w
+			}
+			fmt.Fprintf(os.Stderr, "[%4.0fs %-34s] sent=%d ok=%d rej=%d err=%d drop=%d\n",
 				p.Elapsed.Seconds(), phase, p.Sent, p.OK, p.Rejected, p.Errors, p.Dropped)
 		}}
 

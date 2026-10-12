@@ -6,3 +6,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 bin/
+deploy/.env
+deploy/keys.json
+deploy/keys.txt
+deploy/results/
+
+# prompt 19 verification output
+runs/
+
+# prompt 12: generated training data (regenerate with sim.py)
+predictor/ml/data/

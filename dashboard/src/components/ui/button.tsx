@@ -1,57 +1,113 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+"use client";
+import { cva, type VariantProps } from "class-variance-authority";
+import { motion, type HTMLMotionProps } from "motion/react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { springBouncy, springSnappy, useMagnetic, useReducedMotionSafe } from "@/lib/motion";
 
-const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+export const buttonVariants = cva(
+  "relative inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold outline-none transition-colors focus-visible:shadow-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+        primary: "bg-ultra text-white hover:bg-[image:var(--grad-ultra)] active:bg-ultra-600",
+        secondary: "border-2 border-ink bg-paper text-ink hover:bg-paper-2",
+        soft: "bg-ultra-100 text-ultra-600 hover:bg-ultra-100/70",
+        lime: "bg-lime text-lime-ink hover:brightness-95",
+        ghost: "bg-transparent text-ink hover:bg-paper-2",
+        danger: "bg-bad text-ink hover:brightness-95",
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+        sm: "h-9 min-w-9 px-4 text-[13px] [&_svg]:size-4",
+        md: "h-11 min-w-11 px-5 text-[15px] [&_svg]:size-5",
+        lg: "h-14 min-w-14 px-7 text-[17px] [&_svg]:size-5",
       },
     },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+// Legacy names used by pre-redesign pages (U06–U12 migrate them): mapped, not removed.
+const LEGACY_VARIANT = { default: "primary", outline: "secondary", destructive: "danger" } as const;
+const LEGACY_SIZE = { default: "md" } as const;
+
+type NewVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>;
+type NewSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
+
+export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
+  variant?: NewVariant | keyof typeof LEGACY_VARIANT;
+  size?: NewSize | keyof typeof LEGACY_SIZE;
+  loading?: boolean;
+  /** Icon rendered before the label. */
+  icon?: ReactNode;
+  /** Pull toward the cursor within 80 px (primary CTAs only). */
+  magnetic?: boolean;
+  children?: ReactNode;
 }
 
-export { Button, buttonVariants }
+function Dots() {
+  return (
+    <span className="inline-flex items-center gap-1" role="status" aria-label="Loading">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="size-1.5 rounded-full bg-current"
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.12, ease: "easeInOut" }}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  icon,
+  magnetic = false,
+  className,
+  children,
+  disabled,
+  type = "button",
+  style,
+  ...rest
+}: ButtonProps) {
+  const reduced = useReducedMotionSafe();
+  const mag = useMagnetic<HTMLButtonElement>({ disabled: !magnetic });
+  const v = (variant in LEGACY_VARIANT ? LEGACY_VARIANT[variant as keyof typeof LEGACY_VARIANT] : variant) as NewVariant;
+  const s = (size in LEGACY_SIZE ? LEGACY_SIZE[size as keyof typeof LEGACY_SIZE] : size) as NewSize;
+  /* eslint-disable react-hooks/refs -- motion values are ref-backed but safe to pass as style */
+  return (
+    <motion.button
+      ref={mag.setRef}
+      type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={cn(buttonVariants({ variant: v, size: s }), className)}
+      style={{ ...(magnetic ? mag.style : null), ...style }}
+      whileHover={reduced ? undefined : { scale: 1.04 }}
+      whileTap={reduced ? undefined : { scale: 0.96 }}
+      transition={springSnappy}
+      {...rest}
+    >
+      {loading ? (
+        <Dots />
+      ) : (
+        <>
+          {icon ? (
+            <motion.span
+              className="inline-flex"
+              whileHover={reduced ? undefined : { rotate: [0, 6, -6, 0] }}
+              transition={springBouncy}
+            >
+              {icon}
+            </motion.span>
+          ) : null}
+          {children}
+        </>
+      )}
+    </motion.button>
+  );
+  /* eslint-enable react-hooks/refs */
+}

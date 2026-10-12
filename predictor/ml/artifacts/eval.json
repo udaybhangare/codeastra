@@ -1,0 +1,88 @@
+{
+ "threshold": 0.5,
+ "horizon_s": 10,
+ "test_groups": 42,
+ "note": "simulated data; shows method, not production accuracy",
+ "models": {
+  "baseline": {
+   "detection_rate": 0.405,
+   "mean_lead_misses_as_0_s": 3.43,
+   "pr_auc": 0.5269,
+   "false_alarms_per_hour": 14.4,
+   "median_lead_s": 11.0,
+   "lead_by_scenario": {
+    "S1": {
+     "runs": 5,
+     "detected": 0,
+     "median_lead_s": null
+    },
+    "S2": {
+     "runs": 7,
+     "detected": 0,
+     "median_lead_s": null
+    },
+    "S3": {
+     "runs": 5,
+     "detected": 0,
+     "median_lead_s": null
+    },
+    "S4": {
+     "runs": 6,
+     "detected": 5,
+     "median_lead_s": 1.0
+    },
+    "S5": {
+     "runs": 10,
+     "detected": 10,
+     "median_lead_s": 13.5
+    },
+    "S7": {
+     "runs": 4,
+     "detected": 0,
+     "median_lead_s": null
+    }
+   }
+  },
+  "gbm": {
+   "detection_rate": 1.0,
+   "mean_lead_misses_as_0_s": 9.32,
+   "pr_auc": 0.9349,
+   "false_alarms_per_hour": 19.5,
+   "median_lead_s": 10.0,
+   "lead_by_scenario": {
+    "S1": {
+     "runs": 5,
+     "detected": 5,
+     "median_lead_s": 0.0
+    },
+    "S2": {
+     "runs": 7,
+     "detected": 7,
+     "median_lead_s": 12.0
+    },
+    "S3": {
+     "runs": 5,
+     "detected": 5,
+     "median_lead_s": 11.0
+    },
+    "S4": {
+     "runs": 6,
+     "detected": 6,
+     "median_lead_s": 10.0
+    },
+    "S5": {
+     "runs": 10,
+     "detected": 10,
+     "median_lead_s": 9.5
+    },
+    "S7": {
+     "runs": 4,
+     "detected": 4,
+     "median_lead_s": 10.5
+    }
+   }
+  }
+ },
+ "verdict": "gbm",
+ "default_model": "baseline"
+}

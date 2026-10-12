@@ -130,9 +130,24 @@ func BuildSchedule(sc *Scenario, seed int64) []Request {
 				continue
 			}
 			durS := (w.End - w.Start).Seconds()
+			// optional sub-window of the phase: rates/ramps/bursts are laid
+			// out over [startS, endS] only.
+			startS := math.Min(a.StartS, durS)
+			endS := durS
+			if a.EndS > 0 {
+				endS = math.Min(a.EndS, durS)
+			}
+			if endS <= startS {
+				continue
+			}
+			durS = endS - startS
 			segs := segments(a, durS)
-			arr := stream(seed, ts.Tenant, a.Phase, "arrivals")
-			mixr := stream(seed, ts.Tenant, a.Phase, "mix")
+			parts := []string{ts.Tenant, a.Phase}
+			if startS > 0 { // keeps schedules of un-windowed scenarios byte-identical
+				parts = append(parts, fmt.Sprint(startS))
+			}
+			arr := stream(seed, append(parts, "arrivals")...)
+			mixr := stream(seed, append(parts, "mix")...)
 			mix := a.TaskMix
 			if len(mix) == 0 {
 				mix = []TaskMix{{Task: "echo", Weight: 1}}
@@ -153,7 +168,7 @@ func BuildSchedule(sc *Scenario, seed int64) []Request {
 				}
 				m := pickMix(mixr, mix, total)
 				reqs = append(reqs, Request{
-					Offset: w.Start + time.Duration(math.Round(t*1e9)),
+					Offset: w.Start + time.Duration(math.Round((startS+t)*1e9)),
 					Tenant: ts.Tenant, Phase: a.Phase, Task: m.Task,
 					Params: m.Params, PayloadBytes: m.PayloadBytes,
 					IgnoreRetry: a.RetryWithoutBackoff,

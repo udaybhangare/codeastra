@@ -79,6 +79,7 @@ func FormatReport(w io.Writer, r *Report) {
 		}
 	}
 	tw.Flush()
+	FormatWaves(w, r)
 	formatAssertions(w, r)
 }
 

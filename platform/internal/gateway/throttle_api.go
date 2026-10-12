@@ -7,9 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bulkhead/platform/internal/auth"
 	"github.com/bulkhead/platform/internal/throttle"
-	"github.com/gorilla/websocket"
 )
 
 // Throttler is the slice of the throttle controller the HTTP layer needs.
@@ -110,50 +108,4 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, rows)
-}
-
-var wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
-
-// GET /admin/stream?token=<admin JWT> — live throttle events. Browsers cannot
-// set an Authorization header on a WebSocket, so the token may be a query param.
-func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
-	tok, ok := bearer(r)
-	if !ok {
-		tok = r.URL.Query().Get("token")
-	}
-	c, err := s.AdminSigner.Verify(tok)
-	if tok == "" || err != nil || c.Role != auth.RoleAdmin {
-		writeErr(w, 403, "forbidden", "admin credential required")
-		return
-	}
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	ch, cancel := s.Hub.Subscribe()
-	defer cancel()
-	gone := make(chan struct{})
-	go func() { // reader: detects client close
-		defer close(gone)
-		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
-				return
-			}
-		}
-	}()
-	for {
-		select {
-		case <-gone:
-			return
-		case e, ok := <-ch:
-			if !ok {
-				return
-			}
-			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			if err := conn.WriteJSON(throttle.WSMessage(e)); err != nil {
-				return
-			}
-		}
-	}
 }

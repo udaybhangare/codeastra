@@ -29,7 +29,7 @@ func scen(t *testing.T, id string) *Scenario {
 }
 
 func TestAllScenariosValid(t *testing.T) {
-	for _, id := range []string{"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"} {
+	for _, id := range []string{"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"} {
 		sc := scen(t, id)
 		if sc.ID != id || len(BuildSchedule(sc, 1)) == 0 {
 			t.Errorf("%s: bad scenario", id)

@@ -1,0 +1,12 @@
+# SITE_ADDRESS: bulkhead.udaybhangare.com (auto Let's Encrypt), an IP, or localhost
+# (IPs and localhost get Caddy's internal CA => browser warning, that's expected).
+{$SITE_ADDRESS:localhost} {
+	encode gzip
+	@api path /v1/* /admin/* /healthz
+	handle @api {
+		reverse_proxy bulkheadd:8080
+	}
+	handle {
+		reverse_proxy dashboard:3000
+	}
+}

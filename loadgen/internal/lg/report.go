@@ -60,6 +60,7 @@ type Report struct {
 	Metrics      map[string]float64 `json:"metrics"`
 	Assertions   []AssertResult     `json:"assertions"`
 	Pass         bool               `json:"pass"`
+	Waves        []WaveReport       `json:"waves,omitempty"`
 }
 
 const never = 9999.0 // sentinel for "event never observed"
@@ -178,6 +179,7 @@ func BuildReport(sc *Scenario, reqs []Request, res []Result, st ExecStats, seed 
 	m["victim_p99_inflation"] = 0
 	m["victim_errors"] = 0
 	m["victim_queue_wait_p95_ms"] = 0
+	m["false_positive_count"] = 0 // must exist even when clean, or "== 0" assertions read "unknown metric"
 	m["victim_throughput_ratio"] = math.Inf(1)
 	var sat []float64
 	for _, t := range rep.Tenants {
@@ -224,6 +226,8 @@ func BuildReport(sc *Scenario, reqs []Request, res []Result, st ExecStats, seed 
 			}
 		}
 	}
+
+	rep.Waves = BuildWaves(sc, res)
 
 	rep.Pass = true
 	for _, a := range sc.Assertions {

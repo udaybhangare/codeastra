@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -37,6 +38,9 @@ func TestThrottleAdminAPI(t *testing.T) {
 	})
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
+	rctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	go srv.RunStream(rctx)
 
 	do := func(method, path, tok, body string) (int, string) {
 		req, _ := http.NewRequest(method, ts.URL+path, strings.NewReader(body))

@@ -53,3 +53,96 @@
 - Predictor entry: `Controller.Predict` is a no-op unless `PREDICTIVE_THROTTLE=on`; nothing calls it until the predictor exists.
 - Quarantine rejects (`admission.Quarantine`) are still unwired; quarantine = scheduler lane + tiny CPU/DB caps.
 - **Prompt 10 — S1 smoke run (scale 0.5, ISOLATION=on, 16-core host) did NOT reach Hard**: no victim was ever hurt (acme-shop p99 0.9–1.0× baseline), so the detector — correctly — produced no findings and the ladder stayed at L0 (0 `throttle_events`). The free-tier quotas (10 rps / cost 50/s / concurrency 4) absorbed the flood; even with rogue-ml's policy temporarily lifted to rps 400 / cost 500k/s / 16 cores, per-tenant containers + DRR kept victims at baseline (rogue's own p99 hit ~50 s, `QUEUE_FULL`). So S1's assertion `time_to_mitigate_s ≤ 8` (first X-Throttle-Level ≥ 3 on the culprit) is unreachable while isolation fully contains the attack. Decide in prompt 14/19: either S1 should measure containment (victim p99, abuser goodput) rather than ladder level, or use a scenario where a shared resource (DB pool, queue slots) is what is exhausted. Also: with bulkheadd on the host, worker→DB-proxy calls fail (tenant networks are Internal), so `db-query` errors show up as victim errors; run inside compose for a clean result. Ladder behaviour under real harm is covered only by the fake-clock unit tests so far.
+
+## Prompt 13 — admin API & WebSocket
+- `GET /admin/tenants` now returns the OpenAPI array of `Tenant` (policy + live metrics), replacing the earlier `{"tenants":[...]}` policy list. `name` = tenant id and `status` = `active` (no tenants-table read yet).
+- `PUT /admin/tenants/{id}/policy` merges the body onto the current policy (omitted fields keep their value), then validates (422 on failure), writes, reloads the cache, audits and emits an `admin` event.
+- `POST /admin/isolation` flips admission caps, DB proxy caps, scheduler (DRR/FIFO) + dispatcher, and cgroup limit mode at runtime; the detector follows `adm.IsolationOn`. Emits an `isolation` event.
+- Scenario run delegates to `POST {LOADGEN_URL}/run {run_id,scenario,seed,duration}`. **The loadgen binary has no HTTP trigger yet** (CLI only); until it does, the endpoint returns 502 `loadgen_unavailable` and the run is closed with an error summary. Added (not in openapi): `POST /admin/runs` (loadgen reports a finished run, with or without `run_id`; emits `run_result`) and `POST /admin/runs/{id}/progress` (emits `run_progress`).
+- `GET /admin/predictor` proxies `{PREDICTOR_URL}/state`; if unset/unreachable it returns `{model:"baseline",healthy:false}`. The predictor sidecar (prompt 11) has no HTTP routes in the repo yet.
+- WS `/admin/stream`: per-client bounded queue (16), oldest snapshot dropped first, full snapshot sent on connect. Admin-only (carries all tenants); no tenant-scoped stream exists. CORS allows only `DASHBOARD_ORIGINS` (default `http://localhost:3000`); the same list gates the WS Origin.
+- `victim_inflation`/`jain` come from `metrics.Fairness`; `db_conns`, `p_overload` and host `db_conn_util` are omitted from snapshots until a source exists.
+
+## Prompt 15 — dashboard
+- Heatmap entitlements are placeholder per-tier constants in `dashboard/src/lib/ladder.ts`; the WS snapshot carries no quotas. Replace with policy API values in prompt 16/17.
+- "Victim" highlighting is client-side (unthrottled tenant with p99 > 2× its own best in the 10-min window); the stream has no explicit victim flag.
+- Lighthouse a11y score and the 5×10-min smoothness check were not run (heavy checks; deferred to prompt 19).
+- GAP (admin auth): no prompt covers admin-console sign-in. Dev uses `pnpm mint-token` (dashboard/scripts/mint-token.sh) to bake a 15-min JWT into `.env.local`; this does NOT work in production. Needed before prompt 18: admin sign-in screen (admin key -> POST /admin/auth/token, JWT in memory, auto-refresh + WS reconnect), with `NEXT_PUBLIC_WS_URL` as a bare `wss://…/admin/stream`.
+
+## Prompt 16 — incidents, Why drawer, Scenario Lab, A/B compare
+- **Recorded fallback ships empty.** "Load recorded" fetches `dashboard/public/recorded/<S#>.json`; no file is committed because no real A/B run has been executed yet (numbers must not be fabricated). To create one: run S1 live, press **Export JSON**, save as `dashboard/public/recorded/S1.json`. "Open file…" loads any such export. Full live run deferred to prompt 19.
+- A/B orchestration is client-side (`lib/lab.ts`): POST `/admin/isolation` off → run → wait for `run_result` → isolation on → run; isolation is always set back to ON afterwards. Duration 0 = "scenario default" is sent as-is; the backend/loadgen must treat 0 that way.
+- p99 time series for the A/B charts are captured by the dashboard from the `snapshot` stream while a run is in progress (loadgen reports only per-phase stats), aligned on `run_progress.elapsed_s`. A run seen while the dashboard was disconnected has no chart, only the table.
+- Comparison metrics are read from `summary.metrics` (loadgen Report) or `summary` itself; rows absent from the summary (e.g. `utilization`, which loadgen doesn't emit yet) are hidden, not invented.
+- The WS `event` frame has no `reason` field (schema is closed), so the drawer shows the explanation sentence, evidence, actions, and predictor score but no reason code chip.
+- Why-drawer deep link: `/incidents?e=<ts|tenant|from>to|kind>`; events live only in memory (latest 200), so links to older events show a "no longer in memory" message.
+- Presentation mode is client state (not persisted): 125% root font, sidebar and scenario config hidden, big OFF/ON inflation numbers.
+- **Recorded S1 (`dashboard/public/recorded/S1.json`)** is a real run (loadgen CLI `ab S1 --seed 42`, scale 1, dev host with workers in Docker, 2026-10-12). Victim p99 inflation 2.92e4× OFF vs 1.02× ON; ON assertion on inflation passes. Caveats: (a) `time_to_detect_s`/`time_to_mitigate_s` are the 1e4 "never" sentinel in both runs (S1 mitigation assertion FAILS — same containment-vs-ladder issue as the prompt 10 note; the UI shows "not reached"); (b) data-co shows 0 OK because the host-mode DB proxy can't reach tenant networks (prompt 10 note), which inflates `victim_errors` in both modes; (c) OFF-run p99 climbs to ~60 s because the unbounded queue is the point of the OFF baseline; (d) the p99 series was captured from `/admin/stream` alongside the CLI run, and the first sample of the ON series (still showing the OFF run's draining p99 window) were trimmed. Re-record inside compose for a clean result in prompt 19.
+- **Prompt 17 — tenant portal**: route `/portal` (bypasses the admin shell, so it never opens the admin stream). Backend additions beyond docs/04: `GET /v1/me/live` (caller's own latest 1 s window; the portal polls it every 2 s to draw latency history, as there is no per-tenant latency history endpoint) and `POST /v1/me/key/rotate` (revokes active keys + issues one new key in a transaction, audited as `apikey.rotate`; the new key is shown once). Rotation does not revoke already-issued JWTs (they expire by TTL) because `RevokeTenant` would also kill tokens minted right after rotation. CORS now also covers `/v1/me/*` and `/v1/auth/token` for configured dashboard origins. The portal JWT lives only in memory (reload = log out). Without `NEXT_PUBLIC_API_URL`/live WS it runs on built-in mock data (type `rogue-ml` or `acme-shop` as the key). `openapi.yaml` not yet updated for `/v1/me/live` and `/v1/me/key/rotate`.
+
+## Prompt 11 — predictor sidecar (baseline)
+- Extra endpoint `GET /state` on the sidecar (already expected by `gateway.PredictorHTTP`); `POST /model/select` returns 409 for anything but `baseline` until the GBM challenger (prompt 12) exists.
+- Per-tenant `p_overload` treats a tenant alone using 50% of host cost capacity (`TENANT_MID`) as overload, since the contract carries no per-tenant entitlement. Host capacity comes from env `PREDICTOR_CAPACITY_COST_UNITS_S` (default 200, **a guess** — calibrate against a real run in prompt 19).
+- Rolling state cache lives in the sidecar, keyed by tenant (bounded, evicted after 120 idle calls); each `/predict` call = one 1 s window.
+- Detector gets the forecast as `evidence.predictor_score` (not part of the score). Throttle pre-emption still needs `PREDICTIVE_THROTTLE=on`.
+- Go `predictor.Service` keeps the last sidecar answer for up to 3 s on error ("cached"), then switches to the in-process EWMA fallback; `/admin/predictor` adds a `client` block (calls/errors/fallbacks/latency).
+- Acceptance numbers come from synthetic traces in `predictor/tests/test_baseline.py` (30 noisy ramps ≥ 80% with ≥ 3 s lead; 10 h of noisy-flat traces with zero alerts), not from real loadgen runs. The kill-sidecar check is covered by a Go unit test, not a live compose run (deferred to prompt 19).
+
+## Prompt 18 — AWS deployment
+- **Dashboard ships in mock mode in production** (no `NEXT_PUBLIC_WS_URL`): the admin sign-in gap from prompt 16 is still open, and a baked 15-min JWT is useless/unsafe in a public bundle. `NEXT_PUBLIC_API_URL` is set, so the tenant portal runs live. Closing the gap (admin key → `POST /admin/auth/token`, token in memory, WS reconnect) is needed for a live admin console.
+- **No loadgen HTTP trigger exists** (`LoadgenClient` POSTs `{LOADGEN_URL}/run`, nothing serves it), so dashboard-triggered scenario runs do not work; box #2 runs the loadgen CLI (`compose.loadgen.yml`, `ab S1`) instead of a long-running `loadgen.service`.
+- Worker image keeps the tag `bulkhead/worker:dev` because `workerpool` hard-codes the default; platform/predictor/dashboard/loadgen use `:prod`.
+- bulkheadd mounts `/var/run/docker.sock` (root-equivalent on the host) — required for cgroup updates and worker lifecycle; it is never exposed outside the box. :8080 is published only on `BULKHEAD_BIND_IP` (box #1 private IP; SG allows box #2 only).
+- No CPU pinning of platform containers (R2 "where possible"); host reservation is left to the c6i sizing + separate loadgen host.
+- Manual runbook only, no Terraform. Acceptance runs on real EC2 (<15 min fresh-box, HTTPS, S1 over network, cost alarm) are deferred to the human + prompt 19.
+
+## Prompt 19 — verification
+- Verification ran on one laptop (loadgen co-located with the platform, no EC2/HTTPS), not the two-box topology of docs/02; see `docs/RESULTS.md` for caveats.
+- Scripts live in `deploy/verify/` (`make verify-security|integration|chaos|repeat|all`); `runs/` is gitignored.
+- Fixed `false_positive_count` in loadgen (was missing when 0, so S6's `== 0` assertion read "unknown metric").
+- **Open failure:** S1 `time_to_mitigate_s ≤ 8` is never met (ladder stays ≤ L1; containment comes from static caps). Documented, thresholds not tuned.
+- Known edge: tenant token revocation has 1 s granularity; a token minted in the same second as `revoke-tokens` is rejected.
+- Incident during testing: an early draft of `security.sh` accidentally rotated rogue-ml's API key; restored by re-seeding, `deploy/keys.json` updated (gitignored).
+- S1 assertion `time_to_mitigate_s <= 8` replaced by `abuser_goodput_rps <= 1` (loadgen/scenarios/S1.json). Reason: containment comes from static caps; detector needs victim impact (Q4). docs/09's "L2->L3 within 8s" is therefore not exercised; Q7 timing stays unproven.
+
+## Prompt 12 — ML challenger
+- Training/eval data comes from `predictor/sim.py` (seeded fluid model mirroring S1–S7, 24 seeds × ON/OFF), not the real loadgen+platform export: running the full stack is deferred to prompt 19 (same CSV schema, so `train.py`/`eval.py` take it unchanged). Results show the method only.
+- Tenant label = host overload (demand/mem/db/queue ≥ 1.0) within next 10 s AND that tenant holds ≥35% of a resource then (so flash crowds and innocent victims are negatives).
+- Baseline stays the default model; GBM is opt-in via `POST /admin/predictor/model` (→ sidecar `/model/select`) or `PREDICTOR_MODEL=gbm`. `eta_s` is `null` for GBM (not modelled).
+- Artifacts (`predictor/ml/artifacts/`: model, meta, eval.json) are committed; raw rows (`ml/data/`) are gitignored.
+
+## Prompt 20 — demo polish
+- Presentation mode and the big-number A/B screen already existed (prompt 17); no dashboard changes made here.
+- `demo/recorded/` holds only `S1.json` (exported from the dashboard, seed 42, schedule hash matches `make demo`). It predates the S1 assertion change (§4b): it shows `time_to_mitigate_s` as failed and 733 victim errors in ON, which differ from the loadgen runs in RESULTS §4. Treat it as a UI fallback, not as evidence. S2/S6 bundles were not recorded (the dashboard cannot trigger loadgen runs, see Prompt 18).
+- Architecture "image export" not done; README points at the ASCII diagram in docs/02.
+
+## Prompt 20 — admin sign-in (closes the Prompt 18 "admin auth gap")
+- Dashboard built with `NEXT_PUBLIC_WS_URL=auto` (new default in `deploy/build.sh`): same-origin live backend; the admin enters `ADMIN_API_KEY` once in a sign-in card, the dashboard mints and renews the 15-min JWT (`src/lib/api.ts`). JWT is held in memory; the key in `sessionStorage` (tab-scoped, cleared on tab close) so renewal needs no prompt. "Use simulated data" on the card falls back to the mock stream.
+- Not verified in a browser (no UI checks per AGENTS.md); `tsc --noEmit` clean and the `/admin/auth/token` endpoint answers 200/401 through Caddy.
+- Dashboard image: runs `node_modules/.bin/next` directly (was `pnpm exec`, which made corepack download pnpm at start-up: slow, and broken offline); `--chown=node` fixes the unreadable mode-600 `pnpm-workspace.yaml` that caused the 502 restart loop.
+- Dev (`pnpm dev` on :3000): set `NEXT_PUBLIC_WS_URL=auto` and `NEXT_PUBLIC_API_URL=http://localhost:8080` in `dashboard/.env.local` to use the same sign-in; the backend must allow that origin (CORS).
+- workerpool: before recreating a tenant network, force-disconnect the platform container from the stale one (a leftover network with bulkheadd attached blocked worker creation with 'network already exists' after a platform restart; seen as 503 in make demo). Image rebuild needed: deploy/build.sh platform.
+- compose.prod.yml: DASHBOARD_ORIGINS now includes the HTTPS port (https://localhost:8443) and http://localhost:3000; without the port the browser's WebSocket origin was rejected, so the live stream showed 'Reconnecting…' forever.
+
+- Dashboard: replaced the Tenants, Predictor and Audit placeholder pages with read-only views over /admin/tenants, /admin/predictor and /admin/events (polled every 3 s; src/components/admin/*). Audit shows throttle-ladder decisions: there is no read endpoint for the admin audit table, so admin actions (token issue, revoke, isolation toggle) are not listed. No policy editor.
+
+## Prompt 20 — S9 "gauntlet" (user request)
+- `loadgen/scenarios/S9.json`: every attack of S1–S5, S7, S8 runs concurrently for the whole 150 s attack window (rogue-ml: CPU flood 20 rps, DB hog, 4 GB memory bomb, retry storm, ramp 2→30, 1 MB payloads; leaky-app: 512 MB memory abuser), plus bursty-news' legitimate 10× spike (S6 false-positive probe). Warmup 10 s and cooldown 20 s stay calm because the inflation metric needs a baseline phase; the loadgen only supports one phase of each name, so attacks cannot be sequenced.
+- One run (seed 42, local laptop): OFF victim p99 inflation 27,368×, 2,521 victim errors, throughput ratio 0.39; ON 0 errors, throughput ratio 1.03, 0 false positives. A/B wall time 398 s. ON p99 inflation prints 0.02×, which means the 10 s warmup baseline was inflated by cold starts, not a real 50× speed-up: quote errors and throughput ratio instead. Single seed, not in RESULTS.md.
+- **Laptop safety for S9**: full S9 needs ~16 GB RAM and 60+ cores of demand and crashed a dev PC. Added `loadgen/scenarios/S9-LITE.json` (same shape, ~1/10 size: peak ~1 GB, <2 cores, 60 s attack), a `--load <f>` flag (multiplies every rps, sizes unchanged) and a guard: `loadgen run S9` refuses unless `--heavy` is passed (use on the AWS box only).
+- **S10-MARATHON (laptop-safe, 10 min)**: `loadgen/scenarios/S10-MARATHON.json`. Added optional `start_s`/`end_s` on arrivals (sub-window of a phase, so attacks can be sequenced inside the single `attack` phase) and top-level `waves` (labels over the attack phase). The report gains a per-wave table (sent/ok/rej/throttled/max level/p99 per tenant) and run progress shows the active wave. Un-windowed scenarios keep byte-identical schedules.
+- **S10-MARATHON v2**: one culprit tenant per resource (new seeded tenants cpu-hog, db-hog, queue-storm, bw-hog; leaky-app = memory), staggered and overlapping so several climb the ladder at once; `deploy/seed.sh` now merges new keys into keys.json instead of overwriting.
+
+## UI redesign (docs/ui + prompts/ui)
+- Frontend visuals are redesigned: bright "Paper & Ultramarine" theme, 3D hull landing, floating-sidebar console. Docs: `docs/ui/`; prompts: `prompts/ui/U01–U14` replace the visual parts of prompts 15–17/20. Landing moves to `/`, admin Overview to `/overview`. Dark theme removed.
+
+### U01 foundation
+- Token gallery lives in `dashboard/src/app/%5Ftokens/` (URL `/_tokens`): Next.js treats a literal `_tokens` folder as private/unroutable. Remove in U14.
+- Kept shadcn alias vars (`--background`, `--muted-foreground`, `--border`, ...) in `globals.css`, now pointing at the new tokens, so existing components keep rendering until rebuilt (U06+). Dropped `dark:` classes from `components/ui/button.tsx` (Tailwind v4's default `dark:` follows the OS setting).
+- New deps resolved without peer conflicts: motion 14.1, gsap 3.15, lenis 1.3, three 0.186, @react-three/fiber 9.8, drei 10.7, maath 0.10 (+ @types/three).
+
+## U03 — 3D hull
+- `HullTenant` gains optional `rps`, `p99_ms` (particle rate, tooltip); `HullProps` gains optional `host` (keel gauge) and `className`. Required fields unchanged from docs/ui/03.
+- Off-screen pause uses `frameloop="never"` (resumes on `"always"`) instead of `demand` + invalidate: the scene animates continuously, so demand mode would add nothing.
+- Name plates use drei `Html` (DOM) rather than `Text`, which would fetch a font from a CDN.
+- No test runner exists: `toHullTenants` etc. are checked by `dashboard/scripts/check-hull.mjs`.

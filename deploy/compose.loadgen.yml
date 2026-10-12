@@ -1,0 +1,13 @@
+# Box #2 (bulkhead-loadgen). Runs the loadgen CLI against box #1.
+#   docker compose -f compose.loadgen.yml run --rm loadgen ab S1 --seed 42
+# Needs deploy/.env with LOADGEN_TARGET, LOADGEN_ADMIN_KEY and deploy/keys.json (copied from box #1).
+name: bulkhead-loadgen
+services:
+  loadgen:
+    image: bulkhead/loadgen:prod
+    environment:
+      LOADGEN_TARGET: ${LOADGEN_TARGET:?e.g. http://10.0.1.10:8080 (box #1 private IP)}
+      LOADGEN_KEYS_FILE: /keys.json
+      LOADGEN_ADMIN_KEY: ${ADMIN_API_KEY:?}
+    volumes: ["./keys.json:/keys.json:ro", "./results:/results"]
+    working_dir: /results

@@ -1,0 +1,617 @@
+{
+ "id": "S10-MARATHON",
+ "name": "marathon-safe",
+ "description": "10-minute laptop-safe run. One culprit tenant per resource (cpu-hog, leaky-app=memory, db-hog, queue-storm, bw-hog) start staggered and overlap, so several climb the throttle ladder at once for different reasons; bursty-news spikes legitimately; rogue-ml joins the final gauntlet. Peak ~1.5 GB RAM, ~3 cores.",
+ "default_seed": 42,
+ "phases": [
+  {
+   "name": "warmup",
+   "duration_s": 30
+  },
+  {
+   "name": "attack",
+   "duration_s": 540
+  },
+  {
+   "name": "cooldown",
+   "duration_s": 30
+  }
+ ],
+ "tenants": [
+  {
+   "tenant": "acme-shop",
+   "role": "victim",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 15,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 0.85
+      },
+      {
+       "task": "db-query",
+       "weight": 0.15,
+       "params": {
+        "n": 1
+       }
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 15,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 0.85
+      },
+      {
+       "task": "db-query",
+       "weight": 0.15,
+       "params": {
+        "n": 1
+       }
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 15,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 0.85
+      },
+      {
+       "task": "db-query",
+       "weight": 0.15,
+       "params": {
+        "n": 1
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "tenant": "data-co",
+   "role": "victim",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 4,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 5
+       }
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 4,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 5
+       }
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 4,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 5
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "tenant": "bursty-news",
+   "role": "false_positive_probe",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 5,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 5,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 5,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "burst",
+     "rps": 5,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ],
+     "start_s": 420,
+     "end_s": 480,
+     "burst_multiplier": 6,
+     "burst_duration_s": 30
+    }
+   ]
+  },
+  {
+   "tenant": "cpu-hog",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 1,
+     "task_mix": [
+      {
+       "task": "cpu-burn",
+       "weight": 1,
+       "params": {
+        "ms": 200
+       }
+      }
+     ],
+     "start_s": 20,
+     "end_s": 40
+    },
+    {
+     "phase": "attack",
+     "process": "ramp",
+     "rps": 1,
+     "task_mix": [
+      {
+       "task": "cpu-burn",
+       "weight": 1,
+       "params": {
+        "ms": 200
+       }
+      }
+     ],
+     "start_s": 40,
+     "end_s": 260,
+     "rps_end": 6
+    }
+   ]
+  },
+  {
+   "tenant": "leaky-app",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.8,
+     "task_mix": [
+      {
+       "task": "mem-alloc",
+       "weight": 1,
+       "params": {
+        "mb": 16,
+        "hold_ms": 500
+       }
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.8,
+     "task_mix": [
+      {
+       "task": "mem-alloc",
+       "weight": 1,
+       "params": {
+        "mb": 16,
+        "hold_ms": 500
+       }
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 0.5,
+     "task_mix": [
+      {
+       "task": "mem-alloc",
+       "weight": 1,
+       "params": {
+        "mb": 64,
+        "hold_ms": 2000
+       }
+      }
+     ],
+     "start_s": 80,
+     "end_s": 150
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 3,
+     "task_mix": [
+      {
+       "task": "mem-alloc",
+       "weight": 1,
+       "params": {
+        "mb": 96,
+        "hold_ms": 2000
+       }
+      }
+     ],
+     "start_s": 150,
+     "end_s": 320
+    }
+   ]
+  },
+  {
+   "tenant": "db-hog",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 5
+       }
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 5
+       }
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 2,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 100
+       }
+      }
+     ],
+     "start_s": 140,
+     "end_s": 380
+    }
+   ]
+  },
+  {
+   "tenant": "queue-storm",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 25,
+     "task_mix": [
+      {
+       "task": "cpu-burn",
+       "weight": 1,
+       "params": {
+        "ms": 40
+       }
+      }
+     ],
+     "start_s": 200,
+     "end_s": 440,
+     "retry_without_backoff": true
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 40,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ],
+     "start_s": 200,
+     "end_s": 440
+    }
+   ]
+  },
+  {
+   "tenant": "bw-hog",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 4,
+     "task_mix": [
+      {
+       "task": "payload",
+       "weight": 1,
+       "payload_bytes": 1000000
+      }
+     ],
+     "start_s": 260,
+     "end_s": 500
+    }
+   ]
+  },
+  {
+   "tenant": "rogue-ml",
+   "role": "culprit",
+   "arrivals": [
+    {
+     "phase": "warmup",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "cooldown",
+     "process": "poisson",
+     "rps": 0.4,
+     "task_mix": [
+      {
+       "task": "echo",
+       "weight": 1
+      }
+     ]
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 2,
+     "task_mix": [
+      {
+       "task": "cpu-burn",
+       "weight": 1,
+       "params": {
+        "ms": 200
+       }
+      }
+     ],
+     "start_s": 470,
+     "end_s": 540
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 1.5,
+     "task_mix": [
+      {
+       "task": "db-query",
+       "weight": 1,
+       "params": {
+        "n": 100
+       }
+      }
+     ],
+     "start_s": 470,
+     "end_s": 540
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 0.2,
+     "task_mix": [
+      {
+       "task": "mem-alloc",
+       "weight": 1,
+       "params": {
+        "mb": 256,
+        "hold_ms": 3000
+       }
+      }
+     ],
+     "start_s": 470,
+     "end_s": 540
+    },
+    {
+     "phase": "attack",
+     "process": "poisson",
+     "rps": 2,
+     "task_mix": [
+      {
+       "task": "payload",
+       "weight": 1,
+       "payload_bytes": 1000000
+      }
+     ],
+     "start_s": 470,
+     "end_s": 540
+    }
+   ]
+  }
+ ],
+ "waves": [
+  {
+   "name": "cpu",
+   "kind": "cpu",
+   "start_s": 20,
+   "end_s": 260
+  },
+  {
+   "name": "memory",
+   "kind": "memory",
+   "start_s": 80,
+   "end_s": 320
+  },
+  {
+   "name": "db",
+   "kind": "db",
+   "start_s": 140,
+   "end_s": 380
+  },
+  {
+   "name": "queue",
+   "kind": "queue",
+   "start_s": 200,
+   "end_s": 440
+  },
+  {
+   "name": "bandwidth",
+   "kind": "bandwidth",
+   "start_s": 260,
+   "end_s": 500
+  },
+  {
+   "name": "legit-spike",
+   "kind": "false-positive",
+   "start_s": 420,
+   "end_s": 480
+  },
+  {
+   "name": "gauntlet",
+   "kind": "all",
+   "start_s": 470,
+   "end_s": 540
+  }
+ ],
+ "assertions": [
+  {
+   "metric": "victim_p99_inflation",
+   "op": "<=",
+   "value": 2
+  },
+  {
+   "metric": "victim_errors",
+   "op": "==",
+   "value": 0
+  },
+  {
+   "metric": "false_positive_count",
+   "op": "==",
+   "value": 0
+  }
+ ]
+}

@@ -15,7 +15,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +49,7 @@ type Deps struct {
 	TenantSigner *auth.Signer // JWT_SECRET
 	AdminSigner  *auth.Signer // ADMIN_JWT_SECRET (must differ)
 	Auth         *auth.Authenticator
+	Rotator      KeyRotator // optional; POST /v1/me/key/rotate
 	Revoked      *auth.Revocations
 	Policies     PolicyReader
 	Admit        *admission.Admitter // optional; nil = no admission (tests of earlier prompts)
@@ -59,14 +59,25 @@ type Deps struct {
 	OnReject     func(metrics.Event) // optional; receives admission/queue rejections for metrics + ledger
 	Throttle     Throttler           // optional; level header, /me/throttle, pin/unpin, panic
 	Events       EventLister         // optional; GET /admin/events
-	Hub          *throttle.Hub       // optional; GET /admin/stream
-	AdminKey     string
-	Now          func() time.Time // injected clock for report ranges; default time.Now
-	Log          *slog.Logger
+	Hub          *throttle.Hub       // optional; controller events for /admin/stream
+	Metrics      MetricsSource       // optional; live metrics in tenants + snapshots
+	PolicyStore  PolicyWriter        // optional; PUT /admin/tenants/{id}/policy
+	Isolate      Isolation           // optional; POST /admin/isolation
+	Scenarios    ScenarioStarter     // optional; POST /admin/scenarios/{name}/run
+	Runs         RunStore            // optional; /admin/runs
+	// PredictorState returns the predictor's state; nil or error → baseline fallback.
+	PredictorState func(context.Context) (map[string]any, error)
+	// PredictorSelect switches the sidecar model (baseline|gbm); nil → 501.
+	PredictorSelect func(ctx context.Context, model string) error
+	CORSOrigins     []string // dashboard origins allowed on /admin/*
+	AdminKey        string
+	Now             func() time.Time // injected clock for report ranges; default time.Now
+	Log             *slog.Logger
 }
 
 type Server struct {
 	Deps
+	Stream       *Stream
 	adminKeyHash [32]byte
 }
 
@@ -77,7 +88,7 @@ func New(d Deps) *Server {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
-	return &Server{Deps: d, adminKeyHash: sha256.Sum256([]byte(d.AdminKey))}
+	return &Server{Deps: d, Stream: NewStream(), adminKeyHash: sha256.Sum256([]byte(d.AdminKey))}
 }
 
 // Handler builds the full middleware + routing stack.
@@ -96,10 +107,32 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /v1/me/throttle", s.tenantAuth(s.me("throttle")))
 	}
 	mux.Handle("GET /v1/me/showback", s.tenantAuth(http.HandlerFunc(s.handleMeShowback)))
+	mux.Handle("GET /v1/me/live", s.tenantAuth(http.HandlerFunc(s.handleMeLive)))
+	if s.Rotator != nil {
+		mux.Handle("POST /v1/me/key/rotate", s.tenantAuth(http.HandlerFunc(s.handleMeRotate)))
+	}
 
 	mux.HandleFunc("POST /admin/auth/token", s.handleAdminToken)
 	mux.Handle("GET /admin/usage", s.adminAuth(http.HandlerFunc(s.handleAdminUsage)))
 	mux.Handle("GET /admin/tenants", s.adminAuth(http.HandlerFunc(s.handleAdminTenants)))
+	mux.Handle("GET /admin/tenants/{id}", s.adminAuth(http.HandlerFunc(s.handleAdminTenant)))
+	if s.PolicyStore != nil {
+		mux.Handle("PUT /admin/tenants/{id}/policy", s.adminAuth(http.HandlerFunc(s.handlePutPolicy)))
+	}
+	if s.Isolate != nil {
+		mux.Handle("POST /admin/isolation", s.adminAuth(http.HandlerFunc(s.handleIsolation)))
+	}
+	if s.Runs != nil {
+		mux.Handle("GET /admin/runs", s.adminAuth(http.HandlerFunc(s.handleListRuns)))
+		mux.Handle("GET /admin/runs/{id}", s.adminAuth(http.HandlerFunc(s.handleGetRun)))
+		mux.Handle("POST /admin/runs", s.adminAuth(http.HandlerFunc(s.handleStoreRun)))
+		mux.Handle("POST /admin/runs/{id}/progress", s.adminAuth(http.HandlerFunc(s.handleRunProgress)))
+		if s.Scenarios != nil {
+			mux.Handle("POST /admin/scenarios/{name}/run", s.adminAuth(http.HandlerFunc(s.handleRunScenario)))
+		}
+	}
+	mux.Handle("GET /admin/predictor", s.adminAuth(http.HandlerFunc(s.handlePredictor)))
+	mux.Handle("POST /admin/predictor/model", s.adminAuth(http.HandlerFunc(s.handlePredictorModel)))
 	mux.Handle("POST /admin/tenants/{id}/revoke-tokens", s.adminAuth(http.HandlerFunc(s.handleRevokeTenant)))
 	if s.Throttle != nil {
 		mux.Handle("POST /admin/tenants/{id}/level", s.adminAuth(http.HandlerFunc(s.handleSetLevel)))
@@ -108,11 +141,9 @@ func (s *Server) Handler() http.Handler {
 	if s.Events != nil {
 		mux.Handle("GET /admin/events", s.adminAuth(http.HandlerFunc(s.handleEvents)))
 	}
-	if s.Hub != nil {
-		mux.HandleFunc("GET /admin/stream", s.handleStream)
-	}
+	mux.HandleFunc("GET /admin/stream", s.handleStream)
 
-	return s.requestID(s.logging(s.recoverer(mux)))
+	return s.requestID(s.logging(s.recoverer(s.cors(mux))))
 }
 
 // ---- middleware ----
@@ -331,16 +362,6 @@ func (s *Server) handleAdminToken(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "admin", "admin.token.issue", "", map[string]any{"jti": c.JTI})
 	writeJSON(w, 200, map[string]any{"token": tok, "token_type": "Bearer", "expires_in": int(TokenTTL.Seconds())})
-}
-
-func (s *Server) handleAdminTenants(w http.ResponseWriter, r *http.Request) {
-	snap := s.Policies.Snapshot()
-	list := make([]policy.Policy, 0, len(snap))
-	for _, p := range snap {
-		list = append(list, p)
-	}
-	sort.Slice(list, func(i, j int) bool { return list[i].TenantID < list[j].TenantID })
-	writeJSON(w, 200, map[string]any{"tenants": list})
 }
 
 func (s *Server) handleRevokeTenant(w http.ResponseWriter, r *http.Request) {

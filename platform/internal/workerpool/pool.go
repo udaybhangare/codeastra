@@ -127,6 +127,11 @@ func (p *Pool) Ensure(ctx context.Context, s Spec) error {
 
 	// Clean up leftovers from a previous run with the same name.
 	_ = p.eng.do(ctx, http.MethodDelete, "/containers/"+p.containerName(s.TenantID)+"?force=true", nil, nil)
+	if p.cfg.AttachContainer != "" {
+		// the platform itself stays attached to a stale tenant network and blocks its removal
+		_ = p.eng.do(ctx, http.MethodPost, "/networks/"+p.networkName(s.TenantID)+"/disconnect",
+			map[string]any{"Container": p.cfg.AttachContainer, "Force": true}, nil)
+	}
 	_ = p.eng.do(ctx, http.MethodDelete, "/networks/"+p.networkName(s.TenantID), nil, nil)
 
 	var net struct {

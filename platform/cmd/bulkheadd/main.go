@@ -10,6 +10,7 @@ import (
 	"github.com/bulkhead/platform/internal/detector"
 	"github.com/bulkhead/platform/internal/dispatcher"
 	"github.com/bulkhead/platform/internal/metrics"
+	"github.com/bulkhead/platform/internal/predictor"
 	"github.com/bulkhead/platform/internal/ratelimit"
 	"github.com/bulkhead/platform/internal/scheduler"
 	"github.com/bulkhead/platform/internal/throttle"
@@ -22,6 +23,8 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -137,8 +140,35 @@ func run(log *slog.Logger) error {
 	})
 	snaps := make(chan metrics.Snapshot, 8)
 	agg.SubscribeSnapshots(snaps)
+	// Predictor (docs/07): sidecar with 150 ms timeout, in-process EWMA fallback.
+	// Runs on its own snapshot subscription, never on the request path.
+	predCfg := predictor.Config{Now: now, Log: log,
+		Capacity: envFloat("PREDICTOR_CAPACITY_COST_UNITS_S", 200),
+		OnResult: func(r predictor.Result) {
+			if !adm.IsolationOn() {
+				return
+			}
+			for t, p := range r.Tenants { // flagged by PREDICTIVE_THROTTLE inside the controller
+				ctl.Predict(r.At, t, p.P)
+			}
+		}}
+	if u := os.Getenv("PREDICTOR_URL"); u != "" {
+		predCfg.Client = predictor.NewClient(u)
+	}
+	pred := predictor.NewService(predCfg)
+	predSnaps := make(chan metrics.Snapshot, 8)
+	agg.SubscribeSnapshots(predSnaps)
+	go pred.Run(ctx, predSnaps)
 	det := &detector.Runner{D: detector.New(detector.Config{}), Enabled: adm.IsolationOn,
-		Emit: func(at time.Time, f []detector.Finding) { ctl.Observe(at, f) }}
+		Emit: func(at time.Time, f []detector.Finding) {
+			for i := range f { // forecast as extra evidence on each finding
+				if p, ok := pred.Latest().Tenants[f[i].Culprit]; ok {
+					v := p.P
+					f[i].Evidence.Predicted = &v
+				}
+			}
+			ctl.Observe(at, f)
+		}}
 	go det.Run(ctx, snaps)
 	ledger := usage.NewWriter(usage.PGStore{Pool: pool}, now, log)
 	agg.Subscribe(ledger.WindowSink())
@@ -173,20 +203,54 @@ func run(log *slog.Logger) error {
 		log.Warn("worker pool events unavailable (is Docker running?)", "err", err)
 	}
 	go reconcileWorkers(ctx, log, wp, cache)
+	iso := &isolationSwitch{adm: adm, dbp: dbp, disp: disp, wp: wp, log: log}
+	iso.on.Store(isoOn)
+	store := policy.NewPGStore(pool)
+	var predState func(context.Context) (map[string]any, error)
+	if u := os.Getenv("PREDICTOR_URL"); u != "" {
+		predState = gateway.PredictorHTTP(u)
+	}
+	var predSelect func(context.Context, string) error
+	if u := os.Getenv("PREDICTOR_URL"); u != "" {
+		predSelect = gateway.PredictorSelectHTTP(u)
+	}
+	sidecarState := predState
+	predState = func(c context.Context) (map[string]any, error) {
+		st := map[string]any{"model": "baseline", "healthy": false, "accuracy": map[string]any{}}
+		if sidecarState != nil {
+			if m, err := sidecarState(c); err == nil {
+				st = m
+			}
+		}
+		stt := pred.Stats()
+		st["client"] = map[string]any{"source": stt.Source, "calls": stt.Calls, "errors": stt.Errors,
+			"fallbacks": stt.Fallbacks, "cached_uses": stt.CachedUses,
+			"last_latency_ms": stt.LastLatencyMs, "avg_latency_ms": stt.AvgLatencyMs}
+		return st, nil
+	}
 	srv := gateway.New(gateway.Deps{
-		TenantSigner: auth.NewSigner(jwtSecret, now),
-		AdminSigner:  auth.NewSigner(adminSecret, now),
-		Auth:         &auth.Authenticator{Store: auth.PGKeyStore{Pool: pool}},
-		Revoked:      auth.NewRevocations(now),
-		Policies:     cache,
-		Admit:        adm,
-		Dispatch:     disp,
-		Audit:        gateway.PGAuditor{Pool: pool},
-		OnReject:     record,
-		Throttle:     ctl,
-		Events:       throttle.PGStore{Pool: pool},
-		Hub:          hub,
-		Now:          now,
+		TenantSigner:    auth.NewSigner(jwtSecret, now),
+		AdminSigner:     auth.NewSigner(adminSecret, now),
+		Auth:            &auth.Authenticator{Store: auth.PGKeyStore{Pool: pool}},
+		Rotator:         auth.PGKeyStore{Pool: pool},
+		Revoked:         auth.NewRevocations(now),
+		Policies:        cache,
+		Admit:           adm,
+		Dispatch:        disp,
+		Audit:           gateway.PGAuditor{Pool: pool},
+		OnReject:        record,
+		Throttle:        ctl,
+		Events:          throttle.PGStore{Pool: pool},
+		Hub:             hub,
+		Metrics:         agg,
+		PolicyStore:     policyWriter{store, cache},
+		Isolate:         iso,
+		Scenarios:       gateway.LoadgenClient{Base: os.Getenv("LOADGEN_URL")},
+		Runs:            gateway.PGRunStore{Pool: pool},
+		PredictorState:  predState,
+		PredictorSelect: predSelect,
+		CORSOrigins:     splitCSV(env("DASHBOARD_ORIGINS", "http://localhost:3000")),
+		Now:             now,
 		Usage: &usage.Reporter{Store: usage.PGStore{Pool: pool}, Card: usage.DefaultRateCard(),
 			Weights: est.W, Tier: func(id string) string {
 				p, _ := cache.Get(id)
@@ -196,6 +260,7 @@ func run(log *slog.Logger) error {
 		Log:      log,
 	})
 
+	go srv.RunStream(ctx)
 	root := http.NewServeMux()
 	root.Handle("GET /metrics", agg.Handler())
 	root.Handle("POST /internal/db", dbpool.Handler(dbp, cache, workerSecret))
@@ -244,4 +309,56 @@ func reconcileWorkers(ctx context.Context, log *slog.Logger, wp *workerpool.Pool
 		case <-t.C:
 		}
 	}
+}
+
+// policyWriter persists via the PG store and refreshes the in-memory cache.
+type policyWriter struct {
+	store *policy.PGStore
+	cache *policy.Cache
+}
+
+func (p policyWriter) Put(ctx context.Context, pol policy.Policy) error { return p.store.Put(ctx, pol) }
+func (p policyWriter) Reload(ctx context.Context) error                 { return p.cache.Reload(ctx) }
+
+// isolationSwitch flips every A/B-sensitive component at runtime: admission
+// caps, DB proxy caps, scheduler (DRR/FIFO) + dispatcher concurrency, cgroup
+// limits. The detector reads adm.IsolationOn, so it follows automatically.
+type isolationSwitch struct {
+	on   atomic.Bool
+	adm  *admission.Admitter
+	dbp  *dbpool.Pool
+	disp *dispatcher.Dispatcher
+	wp   *workerpool.Pool
+	log  *slog.Logger
+}
+
+func (i *isolationSwitch) On() bool { return i.on.Load() }
+
+func (i *isolationSwitch) Set(ctx context.Context, on bool) error {
+	i.adm.SetIsolation(on)
+	i.dbp.SetIsolation(on)
+	i.disp.SetIsolation(on)
+	i.on.Store(on)
+	if err := i.wp.SetIsolation(ctx, on); err != nil {
+		i.log.Warn("cgroup limit mode update incomplete", "err", err)
+		return err
+	}
+	return nil
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func envFloat(k string, def float64) float64 {
+	if f, err := strconv.ParseFloat(os.Getenv(k), 64); err == nil && f > 0 {
+		return f
+	}
+	return def
 }
