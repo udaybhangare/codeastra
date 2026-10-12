@@ -51,7 +51,7 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:?}
       PREDICTOR_URL: http://predictor:8000
       PREDICTOR_CAPACITY_COST_UNITS_S: ${PREDICTOR_CAPACITY_COST_UNITS_S:-200}
-      DASHBOARD_ORIGINS: https://${SITE_ADDRESS:-localhost}${CADDY_HTTPS_PORT:+:${CADDY_HTTPS_PORT}},http://localhost:3000
+      DASHBOARD_ORIGINS: https://${SITE_ADDRESS:-localhost}${CADDY_HTTPS_PORT:+:${CADDY_HTTPS_PORT}},http://localhost:3000${EXTRA_DASHBOARD_ORIGINS:+,${EXTRA_DASHBOARD_ORIGINS}}
       ATTACH_CONTAINER: bulkheadd
       DB_PROXY_URL: http://bulkheadd:8080/internal/db
       LOADGEN_URL: ${LOADGEN_URL:-}   # e.g. http://10.0.2.10:8089 (box #2); empty = dashboard Run button disabled

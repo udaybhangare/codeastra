@@ -213,3 +213,9 @@
 - Not changed: backend, contracts, `lib/*` data modules (apart from the seed defaults above).
 
 - **Loadgen HTTP trigger added** (`loadgen serve`, `POST /run {run_id,scenario,seed,duration}`, `GET /healthz`, default `:8089`). Supersedes the "no HTTP trigger" notes above. One run at a time (409 if busy); `duration` rescales phases; S9 refused (use CLI `--heavy`). Reports via `/admin/runs/{id}/progress` and `POST /admin/runs {run_id}`; failures close the run with `{error}`. Deploy: `loadgen-serve` in `compose.loadgen.yml` on box #2 (private IP :8089), `LOADGEN_URL` on box #1.
+
+## Hosting: dashboard on Vercel, backend local via tunnel (replaces docs/10 EC2 for the live demo)
+- AWS free plan only offers small instances (c7i-flex.large: 2 vCPU / 4 GB), too small for clean isolation measurements. The full stack runs on the dev PC (`make demo-local`) and is exposed over an HTTPS tunnel (Tailscale Funnel or cloudflared) to `bulkheadd:8080`.
+- Dashboard is deployed on Vercel (Root Directory `dashboard`, `NEXT_PUBLIC_WS_URL=auto`, `NEXT_PUBLIC_API_URL=<tunnel URL>`).
+- Added optional `EXTRA_DASHBOARD_ORIGINS` to `deploy/compose.prod.yml` so the Vercel origin passes CORS and the WS origin check. No application code changed.
+- Trade-off: demo works only while the PC, Docker stack and tunnel are up; EC2 runbook (docs/10, deploy/RUNBOOK.md) remains valid if credits are available.
