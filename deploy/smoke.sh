@@ -10,7 +10,7 @@ pass=0; fail=0
 ok()  { echo "  PASS  $1"; pass=$((pass+1)); }
 bad() { echo "  FAIL  $1  ($2)"; fail=$((fail+1)); }
 tok() { sed -n 's/.*"token":"\([^"]*\)".*/\1/p'; }
-key() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" keys.json; }
+key() { sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" keys.json; } # seed.sh's jq merge pretty-prints ("k": "v")
 
 [ "$(curl -ksS -o /dev/null -w '%{http_code}' "$BASE/healthz")" = 200 ] && ok "healthz" || bad "healthz" "no 200 from $BASE"
 
