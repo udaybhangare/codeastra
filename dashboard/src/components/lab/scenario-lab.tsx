@@ -11,6 +11,7 @@ import { isBundleFile } from "@/lib/runs";
 import { SCENARIOS } from "@/lib/scenarios";
 import { useUi } from "@/lib/ui";
 import { AbCompare } from "./ab-compare";
+import { ProcessSimPanel } from "./process-sim";
 import { RunPanel } from "./run-panel";
 import { ScenarioCard } from "./scenario-card";
 
@@ -22,6 +23,7 @@ export function ScenarioLab() {
   const [durationS, setDurationS] = useState(12);
   const [mode, setMode] = useState<LabMode>("ab");
   const [notice, setNotice] = useState<string | null>(null);
+  const [sim, setSim] = useState<{ id: string; n: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const running = status === "running-off" || status === "running-on";
   const info = SCENARIOS.find((s) => s.id === selected) ?? SCENARIOS[0];
@@ -30,6 +32,7 @@ export function ScenarioLab() {
   const select = (id: string) => {
     if (running || id === selected) return;
     setSelected(id);
+    setSim(null);
     setSeed(SCENARIOS.find((s) => s.id === id)?.defaultSeed ?? 42);
   };
 
@@ -67,6 +70,7 @@ export function ScenarioLab() {
 
   const run = () => {
     setNotice(null);
+    setSim(null);
     start(selected, seed, durationS, mode);
   };
 
@@ -111,6 +115,8 @@ export function ScenarioLab() {
               onRun={run}
               onLoadRecorded={loadRecorded}
               onOpenFile={() => fileRef.current?.click()}
+              onSimulate={() => setSim((s) => ({ id: selected, n: (s?.n ?? 0) + 1 }))}
+              simulating={sim?.id === selected}
             />
           </div>
         </>
@@ -130,6 +136,12 @@ export function ScenarioLab() {
         <p className="col-span-12 text-[15px] text-ink-2">OFF run finished; waiting for the ON run to produce the comparison.</p>
       )}
 
+      {sim && sim.id === selected && !focusResult && (
+        <div className="col-span-12">
+          <ProcessSimPanel key={`${sim.id}-${seed}-${sim.n}`} scenarioId={sim.id} scenarioName={info.name} seed={seed} />
+        </div>
+      )}
+
       <div className="col-span-12">
         {hasResult ? (
           <AbCompare
@@ -141,7 +153,8 @@ export function ScenarioLab() {
           />
         ) : (
           status === "idle" &&
-          !notice && (
+          !notice &&
+          !sim && (
             <EmptyState
               title="No comparison yet"
               help={`Pick a scenario and press Run A/B: Bulkhead runs it twice with the same seed (isolation OFF, then ON) and shows both side by side.${liveApi ? "" : " Without a backend, use “Load recorded results”."}`}

@@ -219,3 +219,6 @@
 - Dashboard is deployed on Vercel (Root Directory `dashboard`, `NEXT_PUBLIC_WS_URL=auto`, `NEXT_PUBLIC_API_URL=<tunnel URL>`).
 - Added optional `EXTRA_DASHBOARD_ORIGINS` to `deploy/compose.prod.yml` so the Vercel origin passes CORS and the WS origin check. No application code changed.
 - Trade-off: demo works only while the PC, Docker stack and tunnel are up; EC2 runbook (docs/10, deploy/RUNBOOK.md) remains valid if credits are available.
+
+## Scenario Lab: client-side "Simulate live" panel
+- Added `dashboard/src/lib/process-sim.ts` + `components/lab/process-sim.tsx`: a deterministic, stylised fluid model of S1–S8 (OFF vs ON, same seed) that runs in the browser with no backend. It is illustrative, not a measurement; real A/B runs and recorded bundles are unchanged. No scrubber (play/pause/speed/restart only).

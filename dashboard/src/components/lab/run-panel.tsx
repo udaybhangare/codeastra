@@ -1,5 +1,5 @@
 "use client";
-import { Dices, FolderOpen, Play, RotateCcw } from "lucide-react";
+import { Activity, Dices, FolderOpen, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
@@ -25,6 +25,8 @@ export interface RunPanelProps {
   live: boolean;
   onRun: () => void;
   onLoadRecorded: () => void;
+  onSimulate: () => void;
+  simulating: boolean;
   onOpenFile: () => void;
 }
 
@@ -63,6 +65,10 @@ export function RunPanel(p: RunPanelProps) {
       <Button size="lg" magnetic loading={running} disabled={!p.live} onClick={p.onRun} icon={<Play aria-hidden />} className="w-full">
         {p.mode === "ab" ? "Run A/B" : `Run ${p.mode.toUpperCase()}`}
       </Button>
+      <Button variant={p.live ? "secondary" : "primary"} size="md" disabled={running} onClick={p.onSimulate} icon={<Activity aria-hidden />} className="w-full">
+        {p.simulating ? "Restart live simulation" : "Simulate live"}
+      </Button>
+      <p className="-mt-3 text-xs text-ink-2">Watch the processes run in real time, isolation OFF vs ON. Works without a backend.</p>
       {!p.live ? <p className="-mt-3 text-xs text-ink-2">Mock mode has no backend to run on: load a recorded result instead.</p> : null}
 
       <RunProgress status={p.status} mode={p.mode} />
