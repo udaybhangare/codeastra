@@ -70,8 +70,8 @@ export function ScenarioLab() {
 
   const run = () => {
     setNotice(null);
-    setSim(null);
-    start(selected, seed, durationS, mode);
+    setSim((s) => ({ id: selected, n: (s?.n ?? 0) + 1 }));
+    if (liveApi) start(selected, seed, durationS, mode);
   };
 
   const focusResult = presentation && hasResult;
@@ -95,7 +95,7 @@ export function ScenarioLab() {
       className="items-start"
     >
       {!focusResult && (
-        <>
+        <div className="col-span-12 grid grid-cols-12 items-start gap-6">
           <div className="col-span-12 grid grid-cols-1 items-start gap-4 min-[900px]:col-span-8 min-[900px]:grid-cols-2">
             {SCENARIOS.map((s) => (
               <ScenarioCard key={s.id} scenario={s} selected={s.id === selected} seed={s.id === selected ? seed : s.defaultSeed} onSelect={() => select(s.id)} />
@@ -116,10 +116,9 @@ export function ScenarioLab() {
               onLoadRecorded={loadRecorded}
               onOpenFile={() => fileRef.current?.click()}
               onSimulate={() => setSim((s) => ({ id: selected, n: (s?.n ?? 0) + 1 }))}
-              simulating={sim?.id === selected}
             />
           </div>
-        </>
+        </div>
       )}
 
       {status === "error" && (
@@ -138,7 +137,13 @@ export function ScenarioLab() {
 
       {sim && sim.id === selected && !focusResult && (
         <div className="col-span-12">
-          <ProcessSimPanel key={`${sim.id}-${seed}-${sim.n}`} scenarioId={sim.id} scenarioName={info.name} seed={seed} />
+          <ProcessSimPanel
+            key={`${sim.id}-${seed}-${sim.n}`}
+            scenarioId={sim.id}
+            scenarioName={info.name}
+            seed={seed}
+            runSeconds={liveApi && durationS > 0 ? durationS * (mode === "ab" ? 2 : 1) : 0}
+          />
         </div>
       )}
 

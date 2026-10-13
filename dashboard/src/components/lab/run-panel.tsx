@@ -26,7 +26,6 @@ export interface RunPanelProps {
   onRun: () => void;
   onLoadRecorded: () => void;
   onSimulate: () => void;
-  simulating: boolean;
   onOpenFile: () => void;
 }
 
@@ -62,14 +61,18 @@ export function RunPanel(p: RunPanelProps) {
         </span>
       </div>
 
-      <Button size="lg" magnetic loading={running} disabled={!p.live} onClick={p.onRun} icon={<Play aria-hidden />} className="w-full">
+      <Button size="lg" magnetic loading={running} onClick={p.onRun} icon={<Play aria-hidden />} className="w-full">
         {p.mode === "ab" ? "Run A/B" : `Run ${p.mode.toUpperCase()}`}
       </Button>
-      <Button variant={p.live ? "secondary" : "primary"} size="md" disabled={running} onClick={p.onSimulate} icon={<Activity aria-hidden />} className="w-full">
-        {p.simulating ? "Restart live simulation" : "Simulate live"}
-      </Button>
-      <p className="-mt-3 text-xs text-ink-2">Watch the processes run in real time, isolation OFF vs ON. Works without a backend.</p>
-      {!p.live ? <p className="-mt-3 text-xs text-ink-2">Mock mode has no backend to run on: load a recorded result instead.</p> : null}
+      <p className="-mt-3 text-xs text-ink-2">
+        {p.live ? "Starts the live simulation and the real backend run together." : "No backend here: this runs the live simulation only."}
+      </p>
+
+      {p.live ? (
+        <Button variant="secondary" size="md" disabled={running} onClick={p.onSimulate} icon={<Activity aria-hidden />} className="w-full">
+          Replay simulation only
+        </Button>
+      ) : null}
 
       <RunProgress status={p.status} mode={p.mode} />
 

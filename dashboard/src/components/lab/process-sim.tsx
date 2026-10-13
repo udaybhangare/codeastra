@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { levelTone, tenantColor } from "@/lib/colors";
-import { ProcessSim, summarize, type SimState } from "@/lib/process-sim";
+import { DURATION_S, ProcessSim, summarize, type SimState } from "@/lib/process-sim";
 import type { Isolation } from "@/lib/ws-types";
 import { cn } from "@/lib/utils";
 
@@ -122,12 +122,18 @@ export interface ProcessSimPanelProps {
   scenarioId: string;
   scenarioName: string;
   seed: number;
+  /** Expected wall-clock length of a paired backend run (0 = none); picks the initial speed. */
+  runSeconds?: number;
 }
 
 /** Side-by-side live simulation: same seed, isolation OFF vs ON. A stylised model, not a backend run. */
-export function ProcessSimPanel({ scenarioId, scenarioName, seed }: ProcessSimPanelProps) {
+export function ProcessSimPanel({ scenarioId, scenarioName, seed, runSeconds = 0 }: ProcessSimPanelProps) {
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState<"1" | "2" | "4">("2");
+  const [speed, setSpeed] = useState<"1" | "2" | "4">(() => {
+    if (runSeconds <= 0) return "2";
+    const want = DURATION_S / runSeconds;
+    return want >= 3 ? "4" : want >= 1.5 ? "2" : "1";
+  });
   const make = () => ({ off: new ProcessSim(scenarioId, seed, "off" as Isolation), on: new ProcessSim(scenarioId, seed, "on" as Isolation) });
   const [pair, setPair] = useState(make);
   const [view, setView] = useState(() => ({ off: pair.off.snapshot(), on: pair.on.snapshot() }));
