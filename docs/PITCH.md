@@ -217,8 +217,8 @@ alerts; clients are never cut off.
 | Plan | Price | Included credits | Top-up |
 |---|---|---|---|
 | Community | Free (1 node, 5 clients) | 100k / month | not sold |
-| Team | $149 / node / month | 5M / node / month | $8 per 1M |
-| Enterprise | from $499 / node / month | 25M / node / month | $6 per 1M |
+| Team | ₹500 / node / month | 5M / node / month | ₹30 per 1M |
+| Enterprise | from ₹3,000 / node / month | 25M / node / month | ₹25 per 1M |
 
 Landing page: `dashboard/src/components/landing/story/Pricing.tsx`; math in `dashboard/src/lib/pricing.ts`.
 

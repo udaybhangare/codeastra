@@ -19,19 +19,19 @@ const CARDS: { id: PlanId; price: string; unit: string; blurb: string; features:
   },
   {
     id: "team",
-    price: "$149",
+    price: "₹500",
     unit: "per node / month",
     blurb: "For owners packing many clients per node.",
-    features: ["5M credits / node / month", "Unlimited clients per node", "Showback + tenant portal", "Baseline predictor", "Top-up packs at $8 / 1M"],
+    features: ["5M credits / node / month", "Unlimited clients per node", "Showback + tenant portal", "Baseline predictor", "Top-up packs at ₹30 / 1M"],
     cta: "Open Tenant Portal",
     featured: true,
   },
   {
     id: "enterprise",
-    price: "from $499",
+    price: "from ₹3,000",
     unit: "per node / month",
     blurb: "For regulated and large platforms.",
-    features: ["25M credits / node / month", "ML overload predictor", "Audit export + SSO", "gVisor / Firecracker sandboxes", "SLA-backed support · packs at $6 / 1M"],
+    features: ["25M credits / node / month", "ML overload predictor", "Audit export + SSO", "gVisor / Firecracker sandboxes", "SLA-backed support · packs at ₹25 / 1M"],
     cta: "Talk to us",
   },
 ];
@@ -42,7 +42,7 @@ const STEPS = [
   { n: "3", t: "Top up", d: "Need more? Prepaid packs. We alert you first and never cut off your clients." },
 ];
 
-const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
+const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const compact = (n: number) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 
 function Calculator() {
@@ -111,16 +111,16 @@ function Calculator() {
         <div className="rounded-2xl bg-paper-2 p-5" aria-live="polite">
           <p className="text-[13px] font-semibold uppercase tracking-[0.02em] text-ultra">{PLANS[e.plan].name} plan</p>
           <p className="num mt-1 font-display text-[44px] font-extrabold leading-none">
-            {usd(e.total)}
+            {inr(e.total)}
             <span className="ml-1 text-[16px] font-medium text-ink-3">/ month</span>
           </p>
           <dl className="mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-[14px]">
-            <dt className="text-ink-2">Base ({nodes} × {usd(PLANS[e.plan].nodeFee)})</dt>
-            <dd className="num font-semibold">{usd(e.baseCost)}</dd>
+            <dt className="text-ink-2">Base ({nodes} × {inr(PLANS[e.plan].nodeFee)})</dt>
+            <dd className="num font-semibold">{inr(e.baseCost)}</dd>
             <dt className="text-ink-2">Credits used / included</dt>
             <dd className="num font-semibold">{compact(e.creditsUsed)} / {compact(e.creditsIncluded)}</dd>
             <dt className="text-ink-2">Top-up packs ({e.overagePacks} × 1M)</dt>
-            <dd className="num font-semibold">{usd(e.overageCost)}</dd>
+            <dd className="num font-semibold">{inr(e.overageCost)}</dd>
           </dl>
           {!e.fits && (
             <p className="mt-4 text-[13px] text-ink-2">This plan has hard limits that this setup exceeds. Pick Team or Enterprise.</p>

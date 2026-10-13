@@ -6,11 +6,11 @@ export type PlanId = "community" | "team" | "enterprise";
 export interface Plan {
   id: PlanId;
   name: string;
-  /** USD per node per month. */
+  /** INR (₹) per node per month. */
   nodeFee: number;
   /** Credits included per node per month. */
   includedPerNode: number;
-  /** USD per 1,000,000-credit overage pack. null = overage not sold (plan has a hard cap). */
+  /** INR (₹) per 1,000,000-credit overage pack. null = overage not sold (plan has a hard cap). */
   packPrice: number | null;
   /** Hard caps (Community only). */
   maxNodes?: number;
@@ -21,8 +21,8 @@ export const CREDITS_PER_PACK = 1_000_000;
 
 export const PLANS: Record<PlanId, Plan> = {
   community: { id: "community", name: "Community", nodeFee: 0, includedPerNode: 100_000, packPrice: null, maxNodes: 1, maxClientsPerNode: 5 },
-  team: { id: "team", name: "Team", nodeFee: 149, includedPerNode: 5_000_000, packPrice: 8 },
-  enterprise: { id: "enterprise", name: "Enterprise", nodeFee: 499, includedPerNode: 25_000_000, packPrice: 6 },
+  team: { id: "team", name: "Team", nodeFee: 500, includedPerNode: 5_000_000, packPrice: 30 },
+  enterprise: { id: "enterprise", name: "Enterprise", nodeFee: 3000, includedPerNode: 25_000_000, packPrice: 25 },
 };
 
 /** Average metered credits one container client burns per month. */
