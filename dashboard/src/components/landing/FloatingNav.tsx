@@ -53,6 +53,12 @@ export function FloatingNav() {
           Features
         </button>
         <button
+          onClick={() => scroller.scrollTo("#pricing")}
+          className="hidden rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none hover:bg-paper-2 focus-visible:shadow-[var(--ring)] md:block"
+        >
+          Pricing
+        </button>
+        <button
           onClick={() => scroller.scrollTo("#faq")}
           className="hidden rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none hover:bg-paper-2 focus-visible:shadow-[var(--ring)] md:block"
         >

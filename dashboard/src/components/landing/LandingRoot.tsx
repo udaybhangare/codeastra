@@ -16,6 +16,7 @@ import { Faq } from "./story/Faq";
 import { FeatureGrid } from "./story/FeatureGrid";
 import { Footer } from "./story/Footer";
 import { HowItWorks } from "./story/HowItWorks";
+import { Pricing } from "./story/Pricing";
 import { StoryTimeline } from "./story/StoryTimeline";
 
 export function LandingRoot() {
@@ -51,6 +52,7 @@ export function LandingRoot() {
         <div className="relative z-10 bg-paper">
           <HowItWorks />
           <FeatureGrid />
+          <Pricing />
           <Faq />
         </div>
       </main>

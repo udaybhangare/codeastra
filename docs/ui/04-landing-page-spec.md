@@ -53,3 +53,6 @@ Cursor parallax (hull + decor blobs) · compartment hover tooltips · click-to-a
 
 ## Routes
 `/` landing. CTAs link to `/overview` (admin home; created in U06/U07) and `/portal`. If admin auth is required, link goes through the existing admin-login component.
+
+## Pricing (added)
+- Post-story section `#pricing` between Features and FAQ: 3 plan cards, "how credits work" strip, nodes/clients/activity calculator. Illustrative numbers; see docs/PITCH.md §5.

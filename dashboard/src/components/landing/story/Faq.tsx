@@ -7,6 +7,9 @@ const QA = [
   { q: "Will it throttle a legitimate traffic spike?", a: "In our flash-crowd test, 0 good tenants were limited. Busy is not the same as harmful." },
   { q: "What are the walls made of?", a: "Per-tenant containers with kernel cgroup limits: cpu.max, memory.max, pids.max, plus a DB connection cap. Network isolation is app-layer only." },
   { q: "Can an action be undone?", a: "Yes. Escalation is a ladder, every rung is audited, and operators can lift a limit from the console." },
+  { q: "What is a credit?", a: "One metered cost unit from the usage ledger (CPU, memory and DB time rolled together). Each node includes a monthly allowance; extra credits come in prepaid packs." },
+  { q: "What happens when credits run out?", a: "We alert you first. Your clients are never cut off; you top up with a pack or enable auto top-up." },
+  { q: "Why price per node?", a: "A node is the unit we protect and the unit you already pay your cloud for, so the bill tracks your infrastructure, not your request volume." },
   { q: "Are the numbers real?", a: "They come from docs/RESULTS.md: medians of 5 seeded runs on one laptop. Containment is demonstrated; detection timing is not claimed." },
 ] as const;
 
